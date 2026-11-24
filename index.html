@@ -547,7 +547,7 @@ async function readMisfire(i) {
   M.supported = true;
   for (const r of recs) {
     if (r.mid !== mid) continue;
-    if (r.tid === 0x0B) M.ewma[i] = r.val;
+    if (r.tid === 0x0B) { M.ewma[i] = r.val; if (S.drive) S.drive.ewma = M.ewma.slice(); }
     if (r.tid === 0x0C) {
       if (M.base[i] == null || r.val < M.base[i]) { M.base[i] = r.val; M.hist[i] = []; M.warm[i] = 0; }
       else if (M.cur[i] != null && r.val > M.cur[i] && S.data.coolantF != null && S.data.coolantF >= LIMITS.misWarmF) M.warm[i] += r.val - M.cur[i];
@@ -853,6 +853,21 @@ function stats(rows, idx, filt) {
   for (const r of rows) { const v = r[idx]; if (v === '' || v == null || (filt && !filt(r))) continue; n++; s += +v; mn = Math.min(mn, +v); mx = Math.max(mx, +v); }
   return n ? { min: mn, max: mx, avg: s / n, n } : null;
 }
+// Misfires added while the engine was warm, counted from the logged rows themselves,
+// so a drive saved later (app was closed) still gets the right numbers.
+function warmMisfires(rows) {
+  const out = Array(8).fill(0), prev = Array(8).fill(null);
+  for (const r of rows) {
+    const warm = +r[1] > 400 && r[3] !== '' && r[3] != null && +r[3] >= LIMITS.misWarmF;
+    for (let i = 0; i < 8; i++) {
+      const v = r[15 + i]; if (v === '' || v == null) continue;
+      const n = +v;
+      if (prev[i] != null && n > prev[i] && warm) out[i] += n - prev[i];
+      prev[i] = n;
+    }
+  }
+  return out;
+}
 function summary(rows, opts) {
   rows = rows || S.log; opts = opts || {};
   if (!rows.length) return 'No drive data recorded yet.';
@@ -871,8 +886,8 @@ function summary(rows, opts) {
     pre + line('Fuel trim driver % (warm)', 11, warm, true), pre + line('Fuel trim passenger % (warm)', 12, warm, true),
     pre + line('RPM', 1), pre + line('Speed mph', 2), pre + line('Load %', 6), pre + line('Timing °', 14),
     `${pre}Misfires this drive, cyl 1–8: ${mis}`,
-    `${pre}Misfires once warm (160°F+), cyl 1–8: ${S.mis.warm.join(' ')}`,
-    `${pre}10-drive misfire average, cyl 1–8: ${S.mis.ewma.map(x => x == null ? '-' : x).join(' ')}`,
+    `${pre}Misfires once warm (160°F+), cyl 1–8: ${warmMisfires(rows).join(' ')}`,
+    `${pre}10-drive misfire average, cyl 1–8: ${((opts.ewma && opts.ewma.some(x => x != null)) ? opts.ewma : S.mis.ewma).map(x => x == null ? '-' : x).join(' ')}`,
     `${pre}Check engine light: ${lastRow[23] === '' ? '?' : +lastRow[23] ? 'ON' : 'off'} · Codes at end: ${codes || 'none'} ((p) = pending)`,
     pre + smogLine(), pre + leakLine(),
     `${pre}Alerts: ${hist.length ? hist.map(h => `${hhmm(h.at)} ${h.title} (${h.level})`).join('; ') : 'none'}`,
@@ -939,7 +954,7 @@ function finishDrive(reason) {
   let rows = S.log.filter(r => { const t = Date.parse(r[0]); return t >= dr.start - 3000 && t <= end; });
   if (rows.length < 30 || (dr.last || 0) - dr.start < 60000) return;           // skip tiny starts in the driveway
   const stamp = stampOf(dr.start);
-  const md = summary(rows, { md: true, reason });
+  const md = summary(rows, { md: true, reason, ewma: dr.ewma });
   if (rows.length > 4000) { const k = Math.ceil(rows.length / 4000); rows = rows.filter((r, i) => i % k === 0 || r[25]); }
   S.queue.push({ path: `drives/${stamp}.md`, text: md + '\n' }, { path: `drives/${stamp}.csv`, text: csv(rows) + '\n' });
   saveQueue(); flushQueue();
@@ -1155,7 +1170,7 @@ buildUI(); render(); setButtons(); checkStaleDrive(); flushQueue();
 if (!navigator.bluetooth) status('Open this page in the free Bluefy app to connect. Demo works anywhere.');
 
 // test hooks
-window.__TH = { S, toBytes, cleanLines, parseDtcs, parseMode06, decodeDtc, summary, csv, LIMITS, finishDrive, trackDrive, flushQueue, parseReadiness, smogVerdict, leakFindings, leakVerdict };
+window.__TH = { S, toBytes, cleanLines, parseDtcs, parseMode06, decodeDtc, summary, warmMisfires, csv, LIMITS, finishDrive, trackDrive, flushQueue, parseReadiness, smogVerdict, leakFindings, leakVerdict };
 })();
 </script>
 </body>
