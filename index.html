@@ -137,7 +137,7 @@
 
   <section class="card">
     <h2>Misfires this drive</h2>
-    <div class="hint">One cylinder climbing while the rest stay at 0 is the earliest lifter warning on this engine.</div>
+    <div class="hint">One cylinder climbing while the rest stay at 0 is the earliest lifter warning on this engine. A few misfires on a cold start are normal — alerts only count misfires once warm.</div>
     <div class="bank" id="bank1"><div class="side">Driver<br>side</div></div>
     <div class="bank" id="bank2"><div class="side">Passenger<br>side</div></div>
     <div class="hint" id="misNote" style="margin:8px 0 0"></div>
@@ -210,7 +210,7 @@ const LIMITS = {
   transWarnF: 220, transAlarmF: 240,
   voltLowWarn: 12.4, voltLowAlarm: 12.0, voltHighWarn: 15.0, voltHighAlarm: 15.5, restLowWarn: 12.2,
   trimWarn: 12, trimAlarm: 25, trimSplit: 12,
-  misWarn: 5, misAlarm: 25, misBurst: 20, misBurstMin: 5,
+  misWarn: 10, misAlarm: 25, misBurst: 20, misBurstMin: 5, misWarmF: 160,
   noDataSec: 15,
 };
 const u16 = n => '0000' + n.toString(16).padStart(4, '0') + '-0000-1000-8000-00805f9b34fb';
@@ -421,7 +421,7 @@ class DemoElm {
 const S = {
   elm: null, demo: false, running: false, header: null, sup: null,
   data: {}, fails: {}, transSrc: null, transFails: 0,
-  mis: { cur: Array(8).fill(null), ewma: Array(8).fill(null), base: Array(8).fill(null), hist: [[], [], [], [], [], [], [], []], supported: null, fails: 0 },
+  mis: { cur: Array(8).fill(null), ewma: Array(8).fill(null), base: Array(8).fill(null), warm: Array(8).fill(0), hist: [[], [], [], [], [], [], [], []], supported: null, fails: 0 },
   codes: { mil: null, stored: [], pending: [], checked: 0 },
   alerts: {}, cond: {}, history: [], lastOk: 0, engineOnAt: null,
   log: store.get('th_log', []), logMeta: store.get('th_meta', null), rate: 0,
@@ -481,8 +481,10 @@ async function readFast() {
   b = await q01('0D'); if (b) d.mph = b[0] * 0.621371;
   b = await q01('05'); if (b) d.coolantF = cToF(b[0] - 40);
   b = await q01('04'); if (b) d.load = b[0] * 100 / 255;
-  if (has(0x42) && (S.fails.v42 || 0) < 3) { b = await q01('42'); if (b) { d.volts = ((b[0] << 8) | b[1]) / 1000; S.fails.v42 = 0; } else S.fails.v42 = (S.fails.v42 || 0) + 1; }
-  else { const l = await safe('ATRV', 1500); const m = l && l.join('').match(/(\d+(\.\d+)?)\s*V/i); if (m) d.volts = parseFloat(m[1]); }
+  const okV = x => x >= 6 && x <= 20;                                   // the computer reports 0 V while it powers down
+  const engineOff = d.rpm != null && d.rpm < 100;
+  if (!engineOff && has(0x42) && (S.fails.v42 || 0) < 3) { b = await q01('42'); const x = b ? ((b[0] << 8) | b[1]) / 1000 : null; if (x != null && okV(x)) { d.volts = x; S.fails.v42 = 0; } else S.fails.v42 = (S.fails.v42 || 0) + 1; }
+  else { const l = await safe('ATRV', 1500); const m = l && l.join('').match(/(\d+(\.\d+)?)\s*V/i); if (m && okV(parseFloat(m[1]))) d.volts = parseFloat(m[1]); }
 }
 async function readTrims() {
   const d = S.data, tr = b => b ? (b[0] - 128) * 100 / 128 : null;
@@ -490,7 +492,7 @@ async function readTrims() {
   if (has(0x08)) { d.stft2 = tr(await q01('08')); d.ltft2 = tr(await q01('09')); }
   d.trim1 = d.stft1 != null && d.ltft1 != null ? d.stft1 + d.ltft1 : null;
   d.trim2 = d.stft2 != null && d.ltft2 != null ? d.stft2 + d.ltft2 : null;
-  let b = await q01('0F'); if (b) d.iatF = cToF(b[0] - 40);
+  let b = await q01('0F'); if (b && b[0] > 0) d.iatF = cToF(b[0] - 40);
   b = await q01('0E'); if (b) d.timing = b[0] / 2 - 64;
 }
 async function readTrans() {
@@ -513,8 +515,9 @@ async function readMisfire(i) {
     if (r.mid !== mid) continue;
     if (r.tid === 0x0B) M.ewma[i] = r.val;
     if (r.tid === 0x0C) {
-      if (M.base[i] == null || r.val < M.base[i]) { M.base[i] = r.val; M.hist[i] = []; }
-      M.cur[i] = r.val; M.hist[i].push([Date.now(), r.val - M.base[i]]);
+      if (M.base[i] == null || r.val < M.base[i]) { M.base[i] = r.val; M.hist[i] = []; M.warm[i] = 0; }
+      else if (M.cur[i] != null && r.val > M.cur[i] && S.data.coolantF != null && S.data.coolantF >= LIMITS.misWarmF) M.warm[i] += r.val - M.cur[i];
+      M.cur[i] = r.val; M.hist[i].push([Date.now(), M.warm[i]]);
       const cut = Date.now() - LIMITS.misBurstMin * 60000; while (M.hist[i].length && M.hist[i][0][0] < cut) M.hist[i].shift();
     }
   }
@@ -603,12 +606,12 @@ function evaluate(now) {
   const M = S.mis;
   for (let i = 0; i < 8; i++) {
     if (M.cur[i] == null) continue;
-    const n = M.cur[i] - M.base[i], h = M.hist[i], burst = h.length ? h[h.length - 1][1] - h[0][1] : 0;
+    const n = M.warm[i], h = M.hist[i], burst = h.length ? h[h.length - 1][1] - h[0][1] : 0;   // only misfires once the engine is warm count
     const bad = n >= L.misAlarm || burst >= L.misBurst;
     rule('mis' + (i + 1), n >= L.misWarn, 0, bad ? 'alarm' : 'warn',
       `Cylinder ${i + 1} misfiring`,
-      bad ? `${n} misfires this drive. Back off. If the check engine light flashes, stop driving.`
-          : `${n} misfires this drive. Early lifter or spark plug warning — keep an eye on it.`,
+      bad ? `${n} misfires since warming up. Back off. If the check engine light flashes, stop driving.`
+          : `${n} misfires since warming up. Early lifter or spark plug warning — keep an eye on it.`,
       `Cylinder ${i + 1} misfiring.`, now);
   }
 
@@ -705,6 +708,7 @@ function summary(rows, opts) {
     pre + line('Fuel trim driver % (warm)', 11, warm, true), pre + line('Fuel trim passenger % (warm)', 12, warm, true),
     pre + line('RPM', 1), pre + line('Speed mph', 2), pre + line('Load %', 6), pre + line('Timing °', 14),
     `${pre}Misfires this drive, cyl 1–8: ${mis}`,
+    `${pre}Misfires once warm (160°F+), cyl 1–8: ${S.mis.warm.join(' ')}`,
     `${pre}10-drive misfire average, cyl 1–8: ${S.mis.ewma.map(x => x == null ? '-' : x).join(' ')}`,
     `${pre}Check engine light: ${lastRow[23] === '' ? '?' : +lastRow[23] ? 'ON' : 'off'} · Codes at end: ${codes || 'none'} ((p) = pending)`,
     `${pre}Alerts: ${hist.length ? hist.map(h => `${hhmm(h.at)} ${h.title} (${h.level})`).join('; ') : 'none'}`,
@@ -906,7 +910,7 @@ async function loop() {
 async function start(demo) {
   unlockAudio();
   S.demo = demo; S.data = {}; S.alerts = {}; S.cond = {}; S.fails = {}; S.transSrc = null; S.transFails = 0; S.lastOk = 0; S.engineOnAt = null;
-  S.mis = { cur: Array(8).fill(null), ewma: Array(8).fill(null), base: Array(8).fill(null), hist: [[], [], [], [], [], [], [], []], supported: null, fails: 0 };
+  S.mis = { cur: Array(8).fill(null), ewma: Array(8).fill(null), base: Array(8).fill(null), warm: Array(8).fill(0), hist: [[], [], [], [], [], [], [], []], supported: null, fails: 0 };
   S.codes = { mil: null, stored: [], pending: [], checked: 0 };
   if (demo || (S.logMeta && S.logMeta.demo)) { S.log = []; S.logMeta = null; S.history = []; }
   try {
