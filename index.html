@@ -92,6 +92,13 @@
   .switch{width:52px;height:32px;border-radius:999px;background:var(--card2);position:relative;border:1px solid var(--line);flex:none}
   .switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#9aa6b2;transition:.15s}
   .switch.on{background:var(--ok);border-color:var(--ok)} .switch.on::after{left:23px;background:#fff}
+  .field{display:block;margin-top:10px}
+  .field span{display:block;font-size:12.5px;color:var(--muted);margin-bottom:5px}
+  .field input{width:100%;font:16px/1.3 inherit;font-family:inherit;color:var(--text);background:var(--bg);border:1px solid var(--line);
+    border-radius:12px;padding:12px;min-height:46px}
+  .field input:focus{outline:2px solid var(--accent);outline-offset:1px}
+  .cloud-state{font-size:14px;margin-top:2px;line-height:1.4}
+  .cloud-state.ok{color:var(--ok)} .cloud-state.warn{color:var(--warn)} .cloud-state.err{color:#ff8a8c}
   footer{color:var(--dim);font-size:12.5px;line-height:1.45;margin:14px 4px 0}
   footer b{color:var(--muted)}
   #toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#eef2f6;color:#0b0d10;
@@ -156,6 +163,18 @@
       <button class="small primary" id="sumBtn">Copy summary for Claude</button>
       <button class="small" id="csvBtn">Export full log</button>
       <button class="small danger" id="clearBtn">Start new log</button>
+    </div>
+  </section>
+
+  <section class="card" id="cloudCard">
+    <h2>Auto-save drives</h2>
+    <div class="hint">When you shut the truck off, the drive saves to your private GitHub folder so Claude can check it.</div>
+    <div class="cloud-state" id="cloudState">Off — add your GitHub key below.</div>
+    <label class="field"><span>Folder</span><input id="cfgRepo" autocomplete="off" autocapitalize="off" spellcheck="false" value="kaleforall/truck-logs"></label>
+    <label class="field"><span>GitHub key</span><input id="cfgToken" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="github_pat_…"></label>
+    <div class="btns">
+      <button class="small primary" id="cfgSave">Save &amp; test</button>
+      <button class="small" id="cfgFlush">Upload waiting drives</button>
     </div>
   </section>
 
@@ -645,7 +664,7 @@ async function keepAwake() {
   try { if ('wakeLock' in navigator) { S.wl = await navigator.wakeLock.request('screen'); $('#wlNote').textContent = ''; return; } } catch (e) {}
   $('#wlNote').innerHTML = '<b>Screen:</b> set Settings › Display › Auto-Lock to Never while driving, or the phone will sleep and stop watching.';
 }
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.running) keepAwake(); });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState !== 'visible') { saveLog(); return; } if (S.running) keepAwake(); checkStaleDrive(); flushQueue(); });
 
 /* ============================== log ============================== */
 const COLS = ['time', 'rpm', 'mph', 'coolant_F', 'trans_F', 'volts', 'load_pct', 'stft1', 'ltft1', 'stft2', 'ltft2', 'trim_driver', 'trim_pass', 'iat_F', 'timing_deg',
@@ -660,31 +679,131 @@ function logRow(now) {
   if (!S.logMeta) S.logMeta = { start: now, reader: S.elm ? S.elm.name : '', demo: S.demo };
   if (S.log.length % 20 === 0) saveLog();
 }
-function saveLog() { store.set('th_meta', S.logMeta); if (!store.set('th_log', S.log)) { S.log.splice(0, Math.floor(S.log.length / 3)); store.set('th_log', S.log); } }
+function saveLog() { store.set('th_meta', S.logMeta); store.set('th_drive', S.drive); if (!store.set('th_log', S.log)) { S.log.splice(0, Math.floor(S.log.length / 3)); store.set('th_log', S.log); } }
 window.addEventListener('pagehide', saveLog);
-function csv() { return [COLS.join(','), ...S.log.map(r => r.map(x => /[",\s]/.test(String(x)) ? '"' + String(x).replace(/"/g, '""') + '"' : x).join(','))].join('\n'); }
-function stats(idx, filt) {
+function csv(rows) { return [COLS.join(','), ...(rows || S.log).map(r => r.map(x => /[",\s]/.test(String(x)) ? '"' + String(x).replace(/"/g, '""') + '"' : x).join(','))].join('\n'); }
+function stats(rows, idx, filt) {
   let n = 0, s = 0, mn = Infinity, mx = -Infinity;
-  for (const r of S.log) { const v = r[idx]; if (v === '' || v == null || (filt && !filt(r))) continue; n++; s += +v; mn = Math.min(mn, +v); mx = Math.max(mx, +v); }
+  for (const r of rows) { const v = r[idx]; if (v === '' || v == null || (filt && !filt(r))) continue; n++; s += +v; mn = Math.min(mn, +v); mx = Math.max(mx, +v); }
   return n ? { min: mn, max: mx, avg: s / n, n } : null;
 }
-function summary() {
-  if (!S.log.length) return 'No drive data recorded yet.';
-  const first = new Date(S.log[0][0]), last = new Date(S.log[S.log.length - 1][0]);
+function summary(rows, opts) {
+  rows = rows || S.log; opts = opts || {};
+  if (!rows.length) return 'No drive data recorded yet.';
+  const first = new Date(rows[0][0]), last = new Date(rows[rows.length - 1][0]);
   const mins = Math.round((last - first) / 60000), run = r => +r[1] > 400, warm = r => +r[1] > 400 && +r[3] >= 160;
-  const line = (lbl, i, f, sign) => { const s = stats(i, f); if (!s) return `${lbl}: no data`; const g = x => (sign && x > 0 ? '+' : '') + Math.round(x * 10) / 10; return `${lbl}: min ${g(s.min)} / avg ${g(s.avg)} / max ${g(s.max)}`; };
-  const lastRow = S.log[S.log.length - 1], mis = lastRow.slice(15, 23).map(x => x === '' ? '-' : x).join(' ');
+  const line = (lbl, i, f, sign) => { const s = stats(rows, i, f); if (!s) return `${lbl}: no data`; const g = x => (sign && x > 0 ? '+' : '') + Math.round(x * 10) / 10; return `${lbl}: min ${g(s.min)} / avg ${g(s.avg)} / max ${g(s.max)}`; };
+  const lastRow = rows[rows.length - 1], mis = lastRow.slice(15, 23).map(x => x === '' ? '-' : x).join(' ');
+  const hist = S.history.filter(h => h.at >= first.getTime() - 5000 && h.at <= last.getTime() + 90000).slice().reverse();
+  const codes = lastRow[24] || '';
+  const pre = opts.md ? '- ' : '';
   return [
-    `Silverado drive summary — ${first.toLocaleString()} · ${mins} min · ${S.log.length} samples${S.logMeta && S.logMeta.demo ? ' · DEMO DATA' : ''}`,
-    `Reader: ${(S.logMeta && S.logMeta.reader) || '?'} ${S.elmVer ? '(' + S.elmVer + ')' : ''}`,
-    line('Coolant °F (running)', 3, run), line('Trans °F', 4), line('Volts (running)', 5, run),
-    line('Fuel trim driver % (warm)', 11, warm, true), line('Fuel trim passenger % (warm)', 12, warm, true),
-    line('RPM', 1), line('Speed mph', 2), line('Load %', 6), line('Timing °', 14),
-    `Misfires this drive, cyl 1–8: ${mis}`,
-    `10-drive misfire average, cyl 1–8: ${S.mis.ewma.map(x => x == null ? '-' : x).join(' ')}`,
-    `Check engine light: ${S.codes.mil == null ? '?' : S.codes.mil ? 'ON' : 'off'} · Stored: ${S.codes.stored.join(', ') || 'none'} · Pending: ${S.codes.pending.join(', ') || 'none'}`,
-    `Alerts: ${S.history.length ? S.history.slice().reverse().map(h => `${hhmm(h.at)} ${h.title} (${h.level})`).join('; ') : 'none'}`,
-  ].join('\n');
+    `${opts.md ? '# ' : ''}Silverado drive — ${first.toLocaleString()} · ${mins} min · ${rows.length} samples${S.logMeta && S.logMeta.demo ? ' · DEMO DATA' : ''}`,
+    opts.reason ? `${pre}Ended: ${opts.reason}` : null,
+    `${pre}Reader: ${(S.logMeta && S.logMeta.reader) || '?'} ${S.elmVer ? '(' + S.elmVer + ')' : ''}`,
+    pre + line('Coolant °F (running)', 3, run), pre + line('Trans °F', 4), pre + line('Volts (running)', 5, run),
+    pre + line('Fuel trim driver % (warm)', 11, warm, true), pre + line('Fuel trim passenger % (warm)', 12, warm, true),
+    pre + line('RPM', 1), pre + line('Speed mph', 2), pre + line('Load %', 6), pre + line('Timing °', 14),
+    `${pre}Misfires this drive, cyl 1–8: ${mis}`,
+    `${pre}10-drive misfire average, cyl 1–8: ${S.mis.ewma.map(x => x == null ? '-' : x).join(' ')}`,
+    `${pre}Check engine light: ${lastRow[23] === '' ? '?' : +lastRow[23] ? 'ON' : 'off'} · Codes at end: ${codes || 'none'} ((p) = pending)`,
+    `${pre}Alerts: ${hist.length ? hist.map(h => `${hhmm(h.at)} ${h.title} (${h.level})`).join('; ') : 'none'}`,
+  ].filter(x => x != null).join('\n');
+}
+
+/* ============================== drives + cloud save ============================== */
+S.cfg = store.get('th_cloud', { repo: 'kaleforall/truck-logs', token: '' });
+S.drive = store.get('th_drive', null);
+S.queue = store.get('th_queue', []);
+S.cloudMsg = null;
+const b64 = s => { const by = new TextEncoder().encode(s); let bin = ''; for (let i = 0; i < by.length; i += 0x8000) bin += String.fromCharCode.apply(null, by.subarray(i, i + 0x8000)); return btoa(bin); };
+const stampOf = t => { const d = new Date(t), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}_${p(d.getHours())}${p(d.getMinutes())}`; };
+function ghHeaders() { return { Authorization: 'Bearer ' + S.cfg.token.trim(), Accept: 'application/vnd.github+json', 'X-GitHub-Api-Version': '2022-11-28' }; }
+function ghUrl(path) { return `https://api.github.com/repos/${S.cfg.repo.trim()}${path}`; }
+async function ghPut(path, text) {
+  const url = ghUrl('/contents/' + path.split('/').map(encodeURIComponent).join('/'));
+  let sha;
+  const g = await fetch(url, { headers: ghHeaders(), cache: 'no-store' });
+  if (g.ok) sha = (await g.json()).sha; else if (g.status !== 404) throw new Error('GitHub said ' + g.status);
+  const body = { message: 'Truck drive ' + path, content: b64(text) }; if (sha) body.sha = sha;
+  const r = await fetch(url, { method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, ghHeaders()), body: JSON.stringify(body) });
+  if (r.status === 401) throw new Error('GitHub key was rejected');
+  if (r.status === 403 || r.status === 404) throw new Error('Key can\'t save there — Contents must be "Read and write"');
+  if (!r.ok) throw new Error('GitHub said ' + r.status);
+}
+function saveQueue() { if (!store.set('th_queue', S.queue)) { const small = S.queue.filter(q => !q.path.endsWith('.csv')); store.set('th_queue', small); } }
+let flushing = false;
+async function flushQueue() {
+  if (flushing || !S.queue.length || !S.cfg.token) { renderCloud(); return; }
+  flushing = true;
+  try {
+    while (S.queue.length) {
+      const q = S.queue[0];
+      await ghPut(q.path, q.text);
+      S.queue.shift(); saveQueue();
+      S.cloudMsg = { cls: 'ok', text: `Saved ${q.path.replace('drives/', '').replace(/\.(md|csv)$/, '')} at ${hhmm(Date.now())}` };
+      store.set('th_lastSave', S.cloudMsg);
+    }
+  } catch (e) {
+    S.cloudMsg = { cls: navigator.onLine === false ? 'warn' : 'err', text: (navigator.onLine === false ? 'No signal. ' : e.message + '. ') + `${S.queue.length / 2 | 0 || 1} drive(s) waiting — will retry.` };
+  }
+  flushing = false; renderCloud();
+}
+setInterval(() => { if (S.queue.length) flushQueue(); }, 120000);
+window.addEventListener('online', () => flushQueue());
+
+function trackDrive(now) {
+  if (S.demo) return;
+  const rpm = S.data.rpm;
+  if (rpm != null && rpm > 400) {
+    S.offSince = null;
+    if (!S.drive) { S.drive = { start: now }; }
+    S.drive.last = now;
+  } else if (S.drive && rpm != null && rpm < 100) {
+    if (!S.offSince) S.offSince = now;
+    if (now - S.offSince >= 60000) finishDrive('engine off');
+  }
+}
+function finishDrive(reason) {
+  const dr = S.drive; S.drive = null; S.offSince = null; store.set('th_drive', null);
+  if (!dr || S.demo) return;
+  const end = (dr.last || Date.now()) + 75000;
+  let rows = S.log.filter(r => { const t = Date.parse(r[0]); return t >= dr.start - 3000 && t <= end; });
+  if (rows.length < 30 || (dr.last || 0) - dr.start < 60000) return;           // skip tiny starts in the driveway
+  const stamp = stampOf(dr.start);
+  const md = summary(rows, { md: true, reason });
+  if (rows.length > 4000) { const k = Math.ceil(rows.length / 4000); rows = rows.filter((r, i) => i % k === 0 || r[25]); }
+  S.queue.push({ path: `drives/${stamp}.md`, text: md + '\n' }, { path: `drives/${stamp}.csv`, text: csv(rows) + '\n' });
+  saveQueue(); flushQueue();
+}
+function checkStaleDrive() {
+  if (S.drive && !S.running && Date.now() - (S.drive.last || S.drive.start) > 5 * 60000) finishDrive('app was closed');
+}
+function renderCloud() {
+  const el = $('#cloudState'); if (!el) return;
+  let cls = '', text;
+  if (!S.cfg.token) text = 'Off — add your GitHub key below.';
+  else if (S.cloudMsg) { cls = S.cloudMsg.cls; text = S.cloudMsg.text; }
+  else { const last = store.get('th_lastSave', null); cls = 'ok'; text = last ? 'On · last ' + last.text.charAt(0).toLowerCase() + last.text.slice(1) : 'On · waiting for your next drive.'; }
+  if (S.queue.length && S.cfg.token && !(S.cloudMsg && S.cloudMsg.cls !== 'ok')) { cls = 'warn'; text = `${Math.ceil(S.queue.length / 2)} drive(s) waiting to upload.`; }
+  if (S.drive && S.running) text += ' · Recording this drive.';
+  el.className = 'cloud-state ' + cls; el.textContent = text;
+}
+async function testCloud() {
+  S.cfg = { repo: $('#cfgRepo').value.trim(), token: $('#cfgToken').value.trim() };
+  store.set('th_cloud', S.cfg);
+  if (!S.cfg.token) { S.cloudMsg = null; renderCloud(); return; }
+  S.cloudMsg = { cls: '', text: 'Checking…' }; renderCloud();
+  try {
+    const r = await fetch(ghUrl(''), { headers: ghHeaders(), cache: 'no-store' });
+    if (r.status === 401) throw new Error('That key was rejected. Make a new one and paste it again.');
+    if (r.status === 404) throw new Error('Can\'t see ' + S.cfg.repo + '. Check the folder name, and that the key has access to it.');
+    if (!r.ok) throw new Error('GitHub said ' + r.status);
+    const j = await r.json();
+    if (!j.permissions || !j.permissions.push) throw new Error('The key can read but not save. Set Contents to "Read and write".');
+    S.cloudMsg = { cls: 'ok', text: `Connected to ${j.full_name}${j.private ? ' (private)' : ' — careful, this folder is PUBLIC'} ✓` };
+    renderCloud(); flushQueue();
+  } catch (e) { S.cloudMsg = { cls: 'err', text: navigator.onLine === false ? 'No signal — try again with service.' : e.message }; renderCloud(); }
 }
 
 /* ============================== UI ============================== */
@@ -755,6 +874,7 @@ function render() {
   const pill = $('#pill');
   pill.className = 'pill' + (S.running ? (S.demo ? ' demo' : ' on') : '');
   pill.textContent = S.running ? (S.demo ? 'Demo' : 'Live') : 'Not connected';
+  renderCloud();
 }
 
 /* ============================== main loop ============================== */
@@ -772,7 +892,7 @@ async function loop() {
       if (cycle % 60 === 2) await readPending();
       const now = Date.now();
       if ((S.lastRx || 0) > before && S.data.rpm != null) { S.lastOk = now; okCycles++; }
-      evaluate(now); render(); logRow(now);
+      evaluate(now); trackDrive(now); render(); logRow(now);
       const secs = (now - t0) / 1000; if (secs > 0) S.rate = okCycles / secs;
       status(`${S.demo ? 'Demo truck' : 'Connected to ' + S.elm.name} · ${S.rate.toFixed(1)} updates/sec`);
     } catch (e) {
@@ -823,7 +943,7 @@ async function onDrop() {
   if (S.running) { stop(); status('Lost the reader. Tap Connect to try again.'); }
 }
 function stop() {
-  S.running = false; saveLog();
+  S.running = false; if (S.drive) finishDrive('disconnected'); saveLog();
   if (S.elm) S.elm.close();
   try { S.wl && S.wl.release(); } catch (e) {}
   S.alerts = {}; setButtons(); render(); status('Disconnected.');
@@ -856,11 +976,15 @@ $('#csvBtn').onclick = async () => {
 $('#clearBtn').onclick = () => { S.log = []; S.logMeta = null; S.history = []; saveLog(); render(); toast('New log started'); };
 $('#sheetClose').onclick = () => $('#sheet').classList.remove('show');
 
-buildUI(); render(); setButtons();
+$('#cfgSave').onclick = testCloud;
+$('#cfgFlush').onclick = () => { S.cloudMsg = null; if (!S.queue.length) { toast('Nothing waiting'); renderCloud(); return; } flushQueue(); };
+$('#cfgRepo').value = S.cfg.repo || 'kaleforall/truck-logs'; $('#cfgToken').value = S.cfg.token || '';
+
+buildUI(); render(); setButtons(); checkStaleDrive(); flushQueue();
 if (!navigator.bluetooth) status('Open this page in the free Bluefy app to connect. Demo works anywhere.');
 
 // test hooks
-window.__TH = { S, toBytes, cleanLines, parseDtcs, parseMode06, decodeDtc, summary, csv, LIMITS };
+window.__TH = { S, toBytes, cleanLines, parseDtcs, parseMode06, decodeDtc, summary, csv, LIMITS, finishDrive, trackDrive, flushQueue };
 })();
 </script>
 </body>
