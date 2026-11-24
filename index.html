@@ -1,0 +1,867 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b0d10">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Silverado Health</title>
+<style>
+  :root{
+    --bg:#0b0d10; --card:#14181d; --card2:#1b2027; --line:#262c35;
+    --text:#e9eef3; --muted:#8a96a3; --dim:#5d6875;
+    --ok:#2fbf71; --warn:#f5a524; --alarm:#ff4d4f; --accent:#4da3ff;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;background:var(--bg);color:var(--text);
+    font-family:-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    -webkit-font-smoothing:antialiased}
+  body{padding:max(14px,env(safe-area-inset-top)) 14px calc(28px + env(safe-area-inset-bottom))}
+  .wrap{max-width:560px;margin:0 auto}
+  header{display:flex;align-items:center;justify-content:space-between;margin:2px 2px 12px}
+  h1{font-size:20px;margin:0;letter-spacing:-.2px}
+  .sub{color:var(--muted);font-size:12.5px;margin-top:2px}
+  .pill{font-size:12px;font-weight:600;padding:6px 10px;border-radius:999px;background:var(--card2);color:var(--muted);white-space:nowrap}
+  .pill.on{color:#04140b;background:var(--ok)}
+  .pill.demo{color:#1a1200;background:var(--warn)}
+
+  .banner{border-radius:18px;padding:16px 16px 14px;margin-bottom:12px;background:var(--card);border:1px solid var(--line)}
+  .banner .b-title{font-size:24px;font-weight:800;letter-spacing:-.3px;line-height:1.15}
+  .banner .b-msg{font-size:15px;color:var(--muted);margin-top:6px;line-height:1.35}
+  .banner .b-more{font-size:13px;margin-top:8px;color:var(--muted)}
+  .banner.ok{background:linear-gradient(180deg,#10261a,#0f1a14);border-color:#1f4a31}
+  .banner.ok .b-title{color:var(--ok)}
+  .banner.warn{background:linear-gradient(180deg,#2e2208,#1e170a);border-color:#6b4d0e}
+  .banner.warn .b-title{color:var(--warn)} .banner.warn .b-msg{color:#f1dcb0}
+  .banner.alarm{background:linear-gradient(180deg,#3a0f11,#220a0b);border-color:#8a2124;animation:pulse 1.2s ease-in-out infinite}
+  .banner.alarm .b-title{color:#ff6b6d} .banner.alarm .b-msg{color:#ffd3d3}
+  @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,77,79,.0)}50%{box-shadow:0 0 0 6px rgba(255,77,79,.35)}}
+  .banner .b-row{display:flex;gap:8px;margin-top:12px}
+  .banner .b-row button{flex:1}
+  .banner .b-row[hidden]{display:none}
+
+  button{font:inherit;font-weight:650;border:0;border-radius:14px;padding:14px 16px;min-height:50px;
+    background:var(--card2);color:var(--text);cursor:pointer}
+  button:active{transform:scale(.985)}
+  button.primary{background:var(--accent);color:#04111f}
+  button.danger{background:#3a1416;color:#ffb3b4}
+  button.small{min-height:40px;padding:10px 12px;font-size:14px;border-radius:12px}
+  .controls{display:flex;gap:10px;margin-bottom:6px}
+  .controls #connectBtn{flex:2} .controls #demoBtn{flex:1}
+  .status{color:var(--muted);font-size:13px;margin:6px 4px 14px;min-height:18px}
+
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
+  .tile{background:var(--card);border:1px solid var(--line);border-left:5px solid var(--dim);border-radius:16px;padding:12px 12px 10px;min-height:104px}
+  .tile.ok{border-left-color:var(--ok)} .tile.warn{border-left-color:var(--warn);background:#1d1709}
+  .tile.alarm{border-left-color:var(--alarm);background:#230d0e}
+  .t-label{font-size:11.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);font-weight:700}
+  .t-val{font-size:38px;font-weight:800;letter-spacing:-1px;margin-top:4px;font-variant-numeric:tabular-nums;line-height:1.05}
+  .t-val .u{font-size:15px;font-weight:600;color:var(--muted);margin-left:3px;letter-spacing:0}
+  .t-note{font-size:11.5px;color:var(--dim);margin-top:4px}
+  .tile.na .t-val{color:var(--dim);font-size:26px}
+
+  .card{background:var(--card);border:1px solid var(--line);border-radius:18px;padding:14px;margin-bottom:12px}
+  .card h2{font-size:15px;margin:0 0 2px;letter-spacing:-.1px}
+  .card .hint{font-size:12.5px;color:var(--muted);margin-bottom:10px;line-height:1.35}
+  .bank{display:flex;align-items:flex-end;gap:8px;margin:6px 0 2px}
+  .bank .side{width:70px;font-size:11px;color:var(--muted);line-height:1.2;padding-bottom:22px}
+  .cyl{flex:1;text-align:center}
+  .cyl .bar{height:64px;background:var(--card2);border-radius:8px;position:relative;overflow:hidden}
+  .cyl .fill{position:absolute;left:0;right:0;bottom:0;background:var(--ok);opacity:.35;height:4%}
+  .cyl.warn .fill{background:var(--warn);opacity:1} .cyl.alarm .fill{background:var(--alarm);opacity:1}
+  .cyl .cnt{position:absolute;left:0;right:0;top:6px;font-weight:800;font-size:18px;font-variant-numeric:tabular-nums}
+  .cyl .lbl{font-size:12px;color:var(--muted);margin-top:4px}
+  .cyl .avg{font-size:10.5px;color:var(--dim)}
+
+  .row{display:flex;justify-content:space-between;align-items:center;padding:9px 0;border-top:1px solid var(--line);font-size:15px}
+  .row:first-of-type{border-top:0}
+  .row .k{color:var(--muted)} .row .v{font-weight:700;text-align:right}
+  .code{display:block;padding:10px 12px;margin-top:8px;background:var(--card2);border-radius:12px;font-size:14px;line-height:1.35}
+  .code b{font-size:15px} .code a{color:var(--accent);text-decoration:none;font-weight:600;white-space:nowrap}
+  .dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px;background:var(--dim);vertical-align:1px}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.alarm{background:var(--alarm)}
+
+  .hist{font-size:13.5px}
+  .hist div{padding:7px 0;border-top:1px solid var(--line);display:flex;gap:10px}
+  .hist div:first-child{border-top:0}
+  .hist .tm{color:var(--dim);font-variant-numeric:tabular-nums;width:44px;flex:none}
+  .btns{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .btns button{flex:1 1 140px}
+  .toggle{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:15px}
+  .toggle:first-of-type{border-top:0}
+  .switch{width:52px;height:32px;border-radius:999px;background:var(--card2);position:relative;border:1px solid var(--line);flex:none}
+  .switch::after{content:"";position:absolute;top:3px;left:3px;width:24px;height:24px;border-radius:50%;background:#9aa6b2;transition:.15s}
+  .switch.on{background:var(--ok);border-color:var(--ok)} .switch.on::after{left:23px;background:#fff}
+  footer{color:var(--dim);font-size:12.5px;line-height:1.45;margin:14px 4px 0}
+  footer b{color:var(--muted)}
+  #toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#eef2f6;color:#0b0d10;
+    padding:10px 16px;border-radius:12px;font-weight:650;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:20}
+  #toast.show{opacity:1}
+  #sheet{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;z-index:30}
+  #sheet.show{display:flex}
+  #sheet .in{background:var(--card);width:100%;border-radius:18px 18px 0 0;padding:16px 14px calc(16px + env(safe-area-inset-bottom))}
+  #sheet textarea{width:100%;height:46vh;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px;font:12px ui-monospace,Menlo,monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Silverado Health</h1>
+      <div class="sub">2019 · 5.3L V8 · 8-speed</div>
+    </div>
+    <span class="pill" id="pill">Not connected</span>
+  </header>
+
+  <section class="banner" id="banner">
+    <div class="b-title" id="bTitle">Not connected</div>
+    <div class="b-msg" id="bMsg">Plug in the reader, start the truck, then tap Connect.</div>
+    <div class="b-more" id="bMore"></div>
+    <div class="b-row" id="bRow" hidden><button class="small" id="ackBtn">Got it — mute 10 min</button></div>
+  </section>
+
+  <div class="controls">
+    <button class="primary" id="connectBtn">Connect to truck</button>
+    <button id="demoBtn">Demo</button>
+  </div>
+  <div class="status" id="status"></div>
+
+  <section class="tiles" id="tiles"></section>
+
+  <section class="card">
+    <h2>Misfires this drive</h2>
+    <div class="hint">One cylinder climbing while the rest stay at 0 is the earliest lifter warning on this engine.</div>
+    <div class="bank" id="bank1"><div class="side">Driver<br>side</div></div>
+    <div class="bank" id="bank2"><div class="side">Passenger<br>side</div></div>
+    <div class="hint" id="misNote" style="margin:8px 0 0"></div>
+  </section>
+
+  <section class="card">
+    <h2>Trouble codes</h2>
+    <div class="row"><span class="k">Check engine light</span><span class="v" id="milV">—</span></div>
+    <div class="row"><span class="k">Stored codes</span><span class="v" id="storedV">—</span></div>
+    <div class="row"><span class="k">Pending codes (early warnings)</span><span class="v" id="pendV">—</span></div>
+    <div id="codeList"></div>
+  </section>
+
+  <section class="card">
+    <h2>Alerts this drive</h2>
+    <div class="hist" id="hist"><div><span class="tm"></span><span style="color:var(--muted)">None yet.</span></div></div>
+  </section>
+
+  <section class="card">
+    <h2>Drive log</h2>
+    <div class="row"><span class="k">Recording</span><span class="v" id="logLen">—</span></div>
+    <div class="btns">
+      <button class="small primary" id="sumBtn">Copy summary for Claude</button>
+      <button class="small" id="csvBtn">Export full log</button>
+      <button class="small danger" id="clearBtn">Start new log</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Settings</h2>
+    <div class="toggle"><span>Alarm sound</span><span class="switch" id="swSound" role="switch"></span></div>
+    <div class="toggle"><span>Speak alerts out loud</span><span class="switch" id="swVoice" role="switch"></span></div>
+    <div class="btns"><button class="small" id="testBtn">Test alarm</button></div>
+  </section>
+
+  <footer>
+    <b>Before you drive:</b> close the UMEIJA app so it lets go of the reader. Mount your phone and keep this page open — alerts beep and speak, so you don't need to look.<br>
+    <b>Parked overnight:</b> unplug the reader so it can't drain the battery.<br>
+    <span id="wlNote"></span>
+  </footer>
+</div>
+
+<div id="toast"></div>
+<div id="sheet"><div class="in">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+    <b id="sheetTitle">Copy this</b><button class="small" id="sheetClose">Done</button>
+  </div>
+  <textarea id="sheetText" readonly></textarea>
+</div></div>
+
+<script>
+(() => {
+'use strict';
+
+/* ============================== config ============================== */
+const LIMITS = {
+  coolantWarnF: 230, coolantAlarmF: 240, coolantColdF: 165, coldAfterMin: 15,
+  transWarnF: 220, transAlarmF: 240,
+  voltLowWarn: 12.4, voltLowAlarm: 12.0, voltHighWarn: 15.0, voltHighAlarm: 15.5, restLowWarn: 12.2,
+  trimWarn: 12, trimAlarm: 25, trimSplit: 12,
+  misWarn: 5, misAlarm: 25, misBurst: 20, misBurstMin: 5,
+  noDataSec: 15,
+};
+const u16 = n => '0000' + n.toString(16).padStart(4, '0') + '-0000-1000-8000-00805f9b34fb';
+const SERVICE_UUIDS = [
+  u16(0xfff0), u16(0xffe0), u16(0x18f0), u16(0xffb0),
+  'e7810a71-73ae-499d-8c15-faa9aef0c3f2',  // Vgate
+  '49535343-fe7d-4ae5-8fa9-9fafd205e455',  // Microchip transparent UART
+  '6e400001-b5a3-f393-e0a9-e50e24dcca9e',  // Nordic UART
+];
+const ECM = '7E0', TCM = '7E2';
+
+const DTC_TEXT = {
+  P0300:'Random misfire', P0301:'Cylinder 1 misfire', P0302:'Cylinder 2 misfire', P0303:'Cylinder 3 misfire',
+  P0304:'Cylinder 4 misfire', P0305:'Cylinder 5 misfire', P0306:'Cylinder 6 misfire', P0307:'Cylinder 7 misfire',
+  P0308:'Cylinder 8 misfire', P0171:'Driver side running lean', P0174:'Passenger side running lean',
+  P0172:'Driver side running rich', P0175:'Passenger side running rich', P0420:'Catalytic converter, driver side',
+  P0430:'Catalytic converter, passenger side', P0521:'Oil pressure sensor/low oil pressure',
+  P06DD:'Oil pump control stuck off (low oil pressure)', P06DA:'Oil pressure control circuit', P0128:'Engine not warming up (thermostat)',
+  P0101:'Airflow (MAF) sensor reading off', P0106:'Manifold pressure sensor reading off', P0016:'Crank/cam timing mismatch',
+  P0011:'Cam timing over-advanced', P3400:'Cylinder deactivation system', P0562:'System voltage low', P0563:'System voltage high',
+  P0621:'Alternator control circuit', P0622:'Alternator field circuit', P0218:'Transmission fluid over temperature',
+  P0711:'Transmission temp sensor', P0741:'Torque converter clutch slipping', P0700:'Transmission fault (see TCM codes)',
+  P0455:'EVAP large leak (check gas cap)', P0456:'EVAP small leak', P0442:'EVAP small leak',
+  U0100:'Lost communication with engine computer', U0101:'Lost communication with transmission computer',
+  U0102:'Lost communication with transfer case', U0073:'Data network fault', U0403:'Bad data from transfer case',
+};
+
+/* ============================== helpers ============================== */
+const $ = s => document.querySelector(s);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const cToF = c => c * 9 / 5 + 32;
+const r0 = v => v == null ? '—' : Math.round(v).toString();
+const r1 = v => v == null ? '—' : (Math.round(v * 10) / 10).toFixed(1);
+const sgn = v => v == null ? '—' : (v > 0 ? '+' : '') + Math.round(v);
+const hhmm = t => { const d = new Date(t); return d.getHours() + ':' + String(d.getMinutes()).padStart(2, '0'); };
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } },
+};
+let toastTimer;
+function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200); }
+function sheet(title, text) { $('#sheetTitle').textContent = title; $('#sheetText').value = text; $('#sheet').classList.add('show'); setTimeout(() => { const ta = $('#sheetText'); ta.focus(); ta.select(); }, 50); }
+
+/* ============================== ELM327 parsing ============================== */
+const ERR_RE = /NO DATA|UNABLE TO CONNECT|CAN ERROR|BUS ERROR|BUS INIT|STOPPED|ERROR|BUFFER FULL|^\?$|LV RESET|ACT ALERT/i;
+function cleanLines(raw, cmd) {
+  const c = (cmd || '').replace(/\s/g, '').toUpperCase();
+  return raw.replace(/\r/g, '\n').split('\n').map(s => s.trim())
+    .filter(s => s && !/^SEARCHING/i.test(s) && s.replace(/\s/g, '').toUpperCase() !== c && s !== '>');
+}
+function isError(lines) { return !lines.length || lines.some(l => ERR_RE.test(l)); }
+function toBytes(lines) {
+  let len = null; const parts = [];
+  for (const l0 of lines) {
+    let l = l0.replace(/\s+/g, '');
+    if (len === null && parts.length === 0 && /^[0-9A-F]{3}$/i.test(l)) { len = parseInt(l, 16); continue; }
+    const m = l.match(/^([0-9A-F]):(.*)$/i); if (m) l = m[2];
+    if (!/^[0-9A-F]*$/i.test(l) || l.length % 2) continue;
+    parts.push(l);
+  }
+  let hex = parts.join(''); if (len !== null) hex = hex.slice(0, len * 2);
+  const out = []; for (let i = 0; i + 1 < hex.length; i += 2) out.push(parseInt(hex.substr(i, 2), 16));
+  return out;
+}
+function findSeq(b, seq) { outer: for (let i = 0; i <= b.length - seq.length; i++) { for (let j = 0; j < seq.length; j++) if (b[i + j] !== seq[j]) continue outer; return i; } return -1; }
+function decodeDtc(a, b) { return 'PCBU'[a >> 6] + ((a >> 4) & 3) + (a & 15).toString(16).toUpperCase() + b.toString(16).toUpperCase().padStart(2, '0'); }
+function parseDtcs(bytes, mode) {
+  const i = bytes.indexOf(0x40 + mode); if (i < 0) return null;
+  let rest = bytes.slice(i + 1); const out = [];
+  if (rest.length >= 1 && rest.length === 1 + rest[0] * 2) rest = rest.slice(1);       // CAN: count byte first
+  else if (rest.length % 2 === 1) rest = rest.slice(1);
+  for (let k = 0; k + 1 < rest.length; k += 2) { if (rest[k] === 0 && rest[k + 1] === 0) continue; const d = decodeDtc(rest[k], rest[k + 1]); if (!out.includes(d)) out.push(d); }
+  return out;
+}
+function parseMode06(bytes) {
+  const i = bytes.indexOf(0x46); if (i < 0) return null;
+  const recs = [];
+  for (let j = i + 1; j + 9 <= bytes.length; j += 9) recs.push({ mid: bytes[j], tid: bytes[j + 1], uas: bytes[j + 2], val: (bytes[j + 3] << 8) | bytes[j + 4] });
+  return recs;
+}
+
+/* ============================== transports ============================== */
+class BleElm {
+  constructor() { this.buf = ''; this.pending = null; this.queue = Promise.resolve(); this.enc = new TextEncoder(); this.dec = new TextDecoder(); this.onDisconnect = null; }
+  async pick() {
+    if (!navigator.bluetooth) throw new Error('NO_BT');
+    this.device = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: SERVICE_UUIDS });
+    this.name = this.device.name || 'reader';
+    this.device.addEventListener('gattserverdisconnected', () => { if (this.pending) { const p = this.pending; this.pending = null; clearTimeout(p.timer); p.reject(new Error('disconnected')); } this.onDisconnect && this.onDisconnect(); });
+  }
+  async attach() {
+    const server = await this.device.gatt.connect();
+    let rx = null, tx = null;
+    for (const uuid of SERVICE_UUIDS) {
+      let svc; try { svc = await server.getPrimaryService(uuid); } catch (e) { continue; }
+      let chars = []; try { chars = await svc.getCharacteristics(); } catch (e) { continue; }
+      let r = null, t = null;
+      for (const c of chars) { const p = c.properties; if (!r && (p.notify || p.indicate)) r = c; if (!t && (p.write || p.writeWithoutResponse)) t = c; }
+      if (r && t) { rx = r; tx = t; break; }
+    }
+    if (!rx || !tx) throw new Error('NO_CHANNEL');
+    this.rx = rx; this.tx = tx;
+    if (!this._bound) { this._bound = e => this.onData(e.target.value); }
+    rx.addEventListener('characteristicvaluechanged', this._bound);
+    await rx.startNotifications();
+  }
+  get connected() { return !!(this.device && this.device.gatt && this.device.gatt.connected); }
+  onData(dv) {
+    this.buf += this.dec.decode(new Uint8Array(dv.buffer, dv.byteOffset, dv.byteLength));
+    const i = this.buf.indexOf('>');
+    if (i >= 0 && this.pending) { const resp = this.buf.slice(0, i); this.buf = this.buf.slice(i + 1); const p = this.pending; this.pending = null; clearTimeout(p.timer); p.resolve(resp); }
+  }
+  async write(str) {
+    const bytes = this.enc.encode(str); const tx = this.tx;
+    for (let i = 0; i < bytes.length; i += 20) {
+      const chunk = bytes.slice(i, i + 20);
+      if (tx.properties.writeWithoutResponse && tx.writeValueWithoutResponse) await tx.writeValueWithoutResponse(chunk);
+      else if (tx.properties.write && tx.writeValueWithResponse) await tx.writeValueWithResponse(chunk);
+      else await tx.writeValue(chunk);
+    }
+  }
+  send(cmd, timeout = 2500) {
+    const run = () => new Promise((resolve, reject) => {
+      this.buf = '';
+      const timer = setTimeout(() => { if (this.pending) { this.pending = null; reject(new Error('timeout')); } }, timeout);
+      this.pending = { resolve, reject, timer };
+      this.write(cmd + '\r').catch(e => { clearTimeout(timer); this.pending = null; reject(e); });
+    });
+    const p = this.queue.then(run, run); this.queue = p.catch(() => {}); return p;
+  }
+  close() { try { if (this.connected) this.device.gatt.disconnect(); } catch (e) {} }
+}
+
+class DemoTruck {
+  constructor(speed) { this.speed = speed || 1; this.t0 = Date.now(); this.header = ECM; this.echo = true; this.spaces = true; this.mis = [0, 0, 0, 0, 0, 0, 0, 0]; this.ewma = [0, 1, 0, 0, 0, 0, 1, 0]; this.lastMisT = 0; }
+  t() { return (Date.now() - this.t0) / 1000 * this.speed; }
+  vals() {
+    const t = this.t(), j = a => (Math.random() - .5) * 2 * a;
+    let rpm, mph, load;
+    if (t < 8) { rpm = 600 + j(15); mph = 0; load = 18 + j(2); }
+    else if (t < 20) { const k = (t - 8) / 12; rpm = 600 + k * 1600 + j(40); mph = k * 45; load = 55 + j(6); }
+    else { mph = 50 + 8 * Math.sin(t / 25) + j(1); rpm = 1250 + mph * 6 + j(40); load = 30 + j(6); }
+    const coolC = 66 + Math.min(1, t / 40) * 27 + j(.4);
+    let transC = 45 + Math.min(1, t / 50) * 40;
+    if (t > 45) transC = Math.min(108, transC + (t - 45) * 0.6);
+    // cylinder 3 starts missing after 40 s
+    if (t > 40 && t - this.lastMisT >= 3) { this.mis[2] += 1; this.lastMisT = t; }
+    return { rpm, mph, load, coolC, transC, volts: rpm > 400 ? 14.25 + j(.08) : 12.6, stft1: 2 + j(3), ltft1: 4, stft2: 1 + j(3), ltft2: 5, iat: 24, timing: 18 + j(6) };
+  }
+  hex(b) { return b.map(x => x.toString(16).toUpperCase().padStart(2, '0')).join(this.spaces ? ' ' : ''); }
+  frames(b) {
+    if (b.length <= 7) return this.hex(b);
+    const sp = this.spaces ? ' ' : ''; const lines = [b.length.toString(16).toUpperCase().padStart(3, '0'), '0:' + sp + this.hex(b.slice(0, 6))];
+    let k = 1; for (let i = 6; i < b.length; i += 7) { lines.push((k % 16).toString(16).toUpperCase() + ':' + sp + this.hex(b.slice(i, i + 7))); k++; }
+    return lines.join('\r');
+  }
+  respond(cmdIn) {
+    const cmd = cmdIn.trim().toUpperCase().replace(/\s/g, ''); let out;
+    if (cmd === 'ATZ') { this.echo = true; this.spaces = true; out = '\r\rELM327 v1.5'; }
+    else if (cmd === 'ATI') out = 'ELM327 v1.5';
+    else if (/^ATE[01]$/.test(cmd)) { this.echo = cmd === 'ATE1'; out = 'OK'; }
+    else if (/^ATS[01]$/.test(cmd)) { this.spaces = cmd === 'ATS1'; out = 'OK'; }
+    else if (cmd.startsWith('ATSH')) { this.header = cmd.slice(4); out = 'OK'; }
+    else if (cmd === 'ATRV') out = (this.vals().volts).toFixed(1) + 'V';
+    else if (cmd.startsWith('AT')) out = 'OK';
+    else out = this.obd(cmd);
+    return (this.echo ? cmdIn + '\r' : '') + out + '\r\r>';
+  }
+  obd(cmd) {
+    const v = this.vals(), t = this.t(), m = cmd.slice(0, 2), p = cmd.slice(2);
+    const r = b => this.frames(b);
+    if (this.header === TCM) {
+      if (cmd === '221940') return r([0x62, 0x19, 0x40, Math.round(v.transC + 40)]);
+      if (m === '07' || m === '03') return r([0x40 + parseInt(m, 16), 0x00]);
+      return 'NO DATA';
+    }
+    if (m === '01') {
+      const P = parseInt(p, 16), w = x => [(x >> 8) & 255, x & 255], tr = x => Math.round(x * 128 / 100 + 128);
+      const map = {
+        0x00: [0xBF, 0xBF, 0xA8, 0x13], 0x20: [0x80, 0x00, 0x00, 0x01], 0x40: [0x40, 0x00, 0x00, 0x00],
+        0x01: [0x00, 0x07, 0xE5, 0x00], 0x04: [Math.round(v.load * 2.55)], 0x05: [Math.round(v.coolC + 40)],
+        0x06: [tr(v.stft1)], 0x07: [tr(v.ltft1)], 0x08: [tr(v.stft2)], 0x09: [tr(v.ltft2)],
+        0x0C: w(Math.round(v.rpm * 4)), 0x0D: [Math.round(v.mph / 0.621371)], 0x0E: [Math.round((v.timing + 64) * 2)],
+        0x0F: [v.iat + 40], 0x42: w(Math.round(v.volts * 1000)),
+      };
+      return map[P] ? r([0x41, P, ...map[P]]) : 'NO DATA';
+    }
+    if (m === '06') {
+      const mid = parseInt(p, 16), i = mid - 0xA2; if (i < 0 || i > 7) return 'NO DATA';
+      return r([0x46, mid, 0x0B, 0x24, 0, this.ewma[i], 0, 0, 0xFF, 0xFF, mid, 0x0C, 0x24, (this.mis[i] >> 8) & 255, this.mis[i] & 255, 0, 0, 0xFF, 0xFF]);
+    }
+    if (m === '03') return r([0x43, 0x00]);
+    if (m === '07') return t > 90 ? r([0x47, 0x01, 0x03, 0x03]) : r([0x47, 0x00]);
+    if (m === '22') return r([0x7F, 0x22, 0x31]);
+    return 'NO DATA';
+  }
+}
+window.DemoTruck = DemoTruck;
+
+class DemoElm {
+  constructor() { this.truck = new DemoTruck(window.__demoSpeed || 1); this.name = 'Demo truck'; this.connected = true; }
+  async pick() {} async attach() {}
+  async send(cmd) { await sleep(20); const o = this.truck.respond(cmd); return o.slice(0, o.indexOf('>')); }
+  close() { this.connected = false; }
+}
+
+/* ============================== state ============================== */
+const S = {
+  elm: null, demo: false, running: false, header: null, sup: null,
+  data: {}, fails: {}, transSrc: null, transFails: 0,
+  mis: { cur: Array(8).fill(null), ewma: Array(8).fill(null), base: Array(8).fill(null), hist: [[], [], [], [], [], [], [], []], supported: null, fails: 0 },
+  codes: { mil: null, stored: [], pending: [], checked: 0 },
+  alerts: {}, cond: {}, history: [], lastOk: 0, engineOnAt: null,
+  log: store.get('th_log', []), logMeta: store.get('th_meta', null), rate: 0,
+  sound: store.get('th_sound', true), voice: store.get('th_voice', true), lastBeep: 0, wl: null,
+};
+
+/* ============================== ELM commands ============================== */
+async function cmd(c, timeout) {
+  const raw = await S.elm.send(c, timeout);
+  return cleanLines(raw, c);
+}
+async function safe(c, timeout) {
+  try { const l = await cmd(c, timeout); S.lastRx = Date.now(); return l; }
+  catch (e) { if (e.message === 'disconnected') throw e; return null; }
+}
+async function setHeader(h) { if (S.header === h) return; const l = await safe('ATSH' + h); if (l) S.header = h; }
+async function q01(pid) {
+  const l = await safe('01' + pid); if (!l || isError(l)) return null;
+  const b = toBytes(l), i = findSeq(b, [0x41, parseInt(pid, 16)]); return i < 0 ? null : b.slice(i + 2);
+}
+async function q22(did, h) {
+  await setHeader(h);
+  const l = await safe('22' + did, 2000); if (!l || isError(l)) return null;
+  const b = toBytes(l), i = findSeq(b, [0x62, parseInt(did.slice(0, 2), 16), parseInt(did.slice(2), 16)]);
+  return i < 0 ? null : b.slice(i + 3);
+}
+async function q06(mid) {
+  const l = await safe('06' + mid.toString(16).toUpperCase(), 3000); if (!l || isError(l)) return null;
+  return parseMode06(toBytes(l));
+}
+async function qDtc(mode) {
+  const l = await safe('0' + mode, 4000); if (!l) return null; if (isError(l)) return l.some(x => /NO DATA/i.test(x)) ? [] : null;
+  return parseDtcs(toBytes(l), mode);
+}
+const has = pid => !S.sup || S.sup.has(pid);
+function addSupport(base, b) { if (!b || b.length < 4) return; for (let i = 0; i < 32; i++) if (b[i >> 3] & (0x80 >> (i & 7))) S.sup.add(base + i + 1); }
+
+async function initElm() {
+  status('Waking up the reader…');
+  await safe('ATZ', 4000); await sleep(400);
+  for (const c of ['ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATAT1', 'ATSP6']) await safe(c, 2000);   // ATSP6 = CAN 11-bit 500k, no protocol hunting on the bus
+  const ver = await safe('ATI', 1500); S.elmVer = ver && ver.length ? ver.join(' ') : '';
+  S.header = null; await setHeader(ECM);
+  for (let tries = 0; S.running; tries++) {
+    const b = await q01('00');
+    if (b) { S.sup = new Set(); addSupport(0, b); if (S.sup.has(0x20)) addSupport(0x20, await q01('20')); if (S.sup.has(0x40)) addSupport(0x40, await q01('40')); return true; }
+    status(tries < 2 ? 'Reader is on. Waiting for the truck to answer…' : 'Truck not answering. Turn the key to ON or start the engine.');
+    await sleep(3000);
+  }
+  return false;
+}
+
+/* ============================== reads ============================== */
+async function readFast() {
+  const d = S.data;
+  let b = await q01('0C'); if (b) d.rpm = ((b[0] << 8) | b[1]) / 4;
+  b = await q01('0D'); if (b) d.mph = b[0] * 0.621371;
+  b = await q01('05'); if (b) d.coolantF = cToF(b[0] - 40);
+  b = await q01('04'); if (b) d.load = b[0] * 100 / 255;
+  if (has(0x42) && (S.fails.v42 || 0) < 3) { b = await q01('42'); if (b) { d.volts = ((b[0] << 8) | b[1]) / 1000; S.fails.v42 = 0; } else S.fails.v42 = (S.fails.v42 || 0) + 1; }
+  else { const l = await safe('ATRV', 1500); const m = l && l.join('').match(/(\d+(\.\d+)?)\s*V/i); if (m) d.volts = parseFloat(m[1]); }
+}
+async function readTrims() {
+  const d = S.data, tr = b => b ? (b[0] - 128) * 100 / 128 : null;
+  d.stft1 = tr(await q01('06')); d.ltft1 = tr(await q01('07'));
+  if (has(0x08)) { d.stft2 = tr(await q01('08')); d.ltft2 = tr(await q01('09')); }
+  d.trim1 = d.stft1 != null && d.ltft1 != null ? d.stft1 + d.ltft1 : null;
+  d.trim2 = d.stft2 != null && d.ltft2 != null ? d.stft2 + d.ltft2 : null;
+  let b = await q01('0F'); if (b) d.iatF = cToF(b[0] - 40);
+  b = await q01('0E'); if (b) d.timing = b[0] / 2 - 64;
+}
+async function readTrans() {
+  if (S.transSrc === false) return;
+  const srcs = S.transSrc ? [S.transSrc] : [TCM, ECM];
+  let got = false;
+  for (const h of srcs) {
+    const b = await q22('1940', h);
+    if (b && b.length) { const c = b[0] - 40; if (c > -40 && c < 160) { S.data.transF = cToF(c); S.transSrc = h; S.transFails = 0; got = true; break; } }
+  }
+  if (!got && ++S.transFails >= 3 && !S.transSrc) S.transSrc = false;
+  await setHeader(ECM);
+}
+async function readMisfire(i) {
+  const M = S.mis; if (M.supported === false) return;
+  const mid = 0xA2 + i, recs = await q06(mid);
+  if (!recs || !recs.length) { if (++M.fails >= 16 && !M.supported) M.supported = false; return; }
+  M.supported = true;
+  for (const r of recs) {
+    if (r.mid !== mid) continue;
+    if (r.tid === 0x0B) M.ewma[i] = r.val;
+    if (r.tid === 0x0C) {
+      if (M.base[i] == null || r.val < M.base[i]) { M.base[i] = r.val; M.hist[i] = []; }
+      M.cur[i] = r.val; M.hist[i].push([Date.now(), r.val - M.base[i]]);
+      const cut = Date.now() - LIMITS.misBurstMin * 60000; while (M.hist[i].length && M.hist[i][0][0] < cut) M.hist[i].shift();
+    }
+  }
+}
+async function readStatus() {
+  const b = await q01('01'); if (!b) return;
+  S.codes.mil = !!(b[0] & 0x80); const n = b[0] & 0x7f;
+  if (n > 0 || S.codes.mil) { const s = await qDtc(3); if (s) S.codes.stored = s; } else S.codes.stored = [];
+  S.codes.checked = Date.now();
+}
+async function readPending() {
+  const a = await qDtc(7) || [];
+  await setHeader(TCM); const t = await qDtc(7) || []; await setHeader(ECM);
+  S.codes.pending = [...new Set([...a, ...t])];
+}
+
+/* ============================== alerts ============================== */
+const LV = { ok: 0, warn: 1, alarm: 2 };
+function rule(id, on, holdS, level, title, msg, speech, now) {
+  const c = S.cond[id] || (S.cond[id] = { since: null, off: null });
+  if (on) {
+    c.off = null; if (c.since == null) c.since = now;
+    if (now - c.since >= holdS * 1000) raise(id, level, title, msg, speech, now);
+  } else {
+    c.since = null;
+    if (S.alerts[id]) { if (c.off == null) c.off = now; if (now - c.off >= 10000) delete S.alerts[id]; }
+  }
+}
+function raise(id, level, title, msg, speech, now) {
+  const a = S.alerts[id];
+  if (a) { a.title = title; a.msg = msg; if (LV[level] > LV[a.level]) { a.level = level; a.acked = false; S.history.unshift({ at: now, level, title }); announce(a); } a.level = level; return; }
+  const n = S.alerts[id] = { id, level, title, msg, speech, at: now, acked: now < (S.muteUntil || 0) };
+  S.history.unshift({ at: now, level, title }); if (S.history.length > 40) S.history.pop();
+  if (!n.acked) announce(n);
+}
+function announce(a) { beep(a.level); if (S.voice && a.speech) speak(a.speech); }
+
+function evaluate(now) {
+  const d = S.data, L = LIMITS;
+  const running = d.rpm != null && d.rpm > 400;
+  if (running && !S.engineOnAt) S.engineOnAt = now;
+  if (d.rpm != null && d.rpm < 100) S.engineOnAt = null;
+  const runMin = S.engineOnAt ? (now - S.engineOnAt) / 60000 : 0;
+  const T = (v, f) => v == null ? false : f(v);
+
+  // Coolant
+  rule('coolA', T(d.coolantF, v => v >= L.coolantAlarmF), 5, 'alarm', 'Engine overheating',
+    `Coolant ${r0(d.coolantF)}°F. Pull over safely and shut it off.`, 'Engine overheating. Pull over safely.', now);
+  rule('coolW', T(d.coolantF, v => v >= L.coolantWarnF && v < L.coolantAlarmF), 10, 'warn', 'Coolant running hot',
+    `${r0(d.coolantF)}°F. Ease off and watch it.`, 'Coolant running hot.', now);
+  rule('coolC', running && runMin >= L.coldAfterMin && T(d.coolantF, v => v < L.coolantColdF), 60, 'warn', 'Engine not warming up',
+    `Only ${r0(d.coolantF)}°F after ${Math.round(runMin)} min. Thermostat may be stuck open.`, 'Engine not warming up.', now);
+
+  // Transmission
+  rule('transA', T(d.transF, v => v >= L.transAlarmF), 10, 'alarm', 'Transmission overheating',
+    `${r0(d.transF)}°F. Ease off, or pull over and idle in Park to cool it.`, 'Transmission overheating.', now);
+  rule('transW', T(d.transF, v => v >= L.transWarnF && v < L.transAlarmF), 30, 'warn', 'Transmission running hot',
+    `${r0(d.transF)}°F. Normal is about 150–210°F. Go easy, especially uphill or towing.`, 'Transmission running hot.', now);
+
+  // Charging
+  const v = d.volts;
+  rule('voltLA', running && T(v, x => x < L.voltLowAlarm), 30, 'alarm', 'Battery not charging',
+    `${r1(v)} V with the engine running. Alternator or belt problem — head home or to a shop.`, 'Battery not charging.', now);
+  rule('voltLW', running && T(v, x => x >= L.voltLowAlarm && x < L.voltLowWarn), 60, 'warn', 'Charging voltage low',
+    `${r1(v)} V running. Should be 12.6–14.8 V.`, 'Charging voltage low.', now);
+  rule('voltHA', running && T(v, x => x > L.voltHighAlarm), 5, 'alarm', 'Overcharging',
+    `${r1(v)} V. Voltage regulator problem — can cook the battery.`, 'Overcharging. Check the alternator.', now);
+  rule('voltHW', running && T(v, x => x > L.voltHighWarn && x <= L.voltHighAlarm), 10, 'warn', 'Voltage high',
+    `${r1(v)} V running. Should stay under 15 V.`, 'Voltage high.', now);
+  rule('voltRest', d.rpm != null && d.rpm < 100 && T(v, x => x < L.restLowWarn), 10, 'warn', 'Battery low',
+    `${r1(v)} V with the engine off. A healthy battery rests at 12.4–12.7 V.`, 'Battery low.', now);
+
+  // Fuel trims (only when warm and running)
+  const closed = running && T(d.coolantF, x => x >= 160);
+  for (const [k, side, cyls] of [['trim1', 'Driver side', '1-3-5-7'], ['trim2', 'Passenger side', '2-4-6-8']]) {
+    const t = d[k], big = T(t, x => Math.abs(x) > L.trimAlarm), lean = t > 0;
+    rule(k, closed && T(t, x => Math.abs(x) > L.trimWarn), big ? 30 : 60, big ? 'alarm' : 'warn',
+      `${side} running ${lean ? 'lean' : 'rich'}`,
+      `Fuel trim ${sgn(t)}%. ${lean ? 'Likely a vacuum leak or weak injector' : 'Likely a leaking injector or sensor issue'} on cylinders ${cyls}.`,
+      `${side} running ${lean ? 'lean' : 'rich'}.`, now);
+  }
+  rule('trimSplit', closed && d.trim1 != null && d.trim2 != null && Math.abs(d.trim1 - d.trim2) > L.trimSplit, 60, 'warn',
+    'One side fueling differently', `Driver ${sgn(d.trim1)}% vs passenger ${sgn(d.trim2)}%. Points to a leak or injector on one side.`, 'Fuel trims uneven side to side.', now);
+
+  // Misfires
+  const M = S.mis;
+  for (let i = 0; i < 8; i++) {
+    if (M.cur[i] == null) continue;
+    const n = M.cur[i] - M.base[i], h = M.hist[i], burst = h.length ? h[h.length - 1][1] - h[0][1] : 0;
+    const bad = n >= L.misAlarm || burst >= L.misBurst;
+    rule('mis' + (i + 1), n >= L.misWarn, 0, bad ? 'alarm' : 'warn',
+      `Cylinder ${i + 1} misfiring`,
+      bad ? `${n} misfires this drive. Back off. If the check engine light flashes, stop driving.`
+          : `${n} misfires this drive. Early lifter or spark plug warning — keep an eye on it.`,
+      `Cylinder ${i + 1} misfiring.`, now);
+  }
+
+  // Codes
+  rule('mil', S.codes.mil === true, 0, 'alarm', 'Check engine light ON',
+    S.codes.stored.length ? 'Code: ' + S.codes.stored.join(', ') + '. ' + (DTC_TEXT[S.codes.stored[0]] || '') : 'Reading codes…', 'Check engine light is on.', now);
+  rule('stored', S.codes.mil === false && S.codes.stored.length > 0, 0, 'warn', 'Stored code',
+    S.codes.stored.join(', ') + ' — light is off but the computer saved it.', 'Stored trouble code.', now);
+  rule('pending', S.codes.pending.length > 0, 0, 'warn', 'Pending code: ' + S.codes.pending.join(', '),
+    (DTC_TEXT[S.codes.pending[0]] || 'Early warning') + '. Not a check engine light yet — it sets if it happens again.', 'New pending trouble code.', now);
+
+  // Connection
+  rule('nodata', S.running && !S.demo && S.lastOk && now - S.lastOk > L.noDataSec * 1000, 0, 'warn', 'Lost truck data',
+    'Check the reader is pushed in all the way. Still trying…', 'Lost truck data.', now);
+
+  // Tile levels
+  const lv = ids => { let m = 'ok'; for (const id of ids) { const a = S.alerts[id]; if (a && LV[a.level] > LV[m]) m = a.level; } return m; };
+  S.tileLv = {
+    coolantF: lv(['coolA', 'coolW', 'coolC']), transF: lv(['transA', 'transW']),
+    volts: lv(['voltLA', 'voltLW', 'voltHA', 'voltHW', 'voltRest']),
+    trim1: lv(['trim1', 'trimSplit']), trim2: lv(['trim2', 'trimSplit']),
+  };
+}
+
+/* ============================== sound / voice ============================== */
+let actx = null;
+function unlockAudio() {
+  try { if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)(); if (actx.state === 'suspended') actx.resume(); } catch (e) {}
+  try { if (window.speechSynthesis) { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } } catch (e) {}
+}
+function beep(level) {
+  if (!S.sound || !actx) return; S.lastBeep = Date.now();
+  const n = level === 'alarm' ? 3 : 2, f = level === 'alarm' ? 1320 : 880;
+  try {
+    for (let i = 0; i < n; i++) {
+      const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime + i * 0.22;
+      o.type = 'square'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.35, t + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.16);
+      o.connect(g).connect(actx.destination); o.start(t); o.stop(t + 0.18);
+    }
+  } catch (e) {}
+}
+function speak(text) {
+  try { if (!window.speechSynthesis) return; const u = new SpeechSynthesisUtterance(text); u.rate = 1.02; setTimeout(() => speechSynthesis.speak(u), 750); } catch (e) {}
+}
+setInterval(() => {
+  const now = Date.now();
+  const loud = Object.values(S.alerts).some(a => a.level === 'alarm' && !a.acked);
+  if (loud && now - S.lastBeep > 8000) beep('alarm');
+}, 1000);
+
+async function keepAwake() {
+  try { if ('wakeLock' in navigator) { S.wl = await navigator.wakeLock.request('screen'); $('#wlNote').textContent = ''; return; } } catch (e) {}
+  $('#wlNote').innerHTML = '<b>Screen:</b> set Settings › Display › Auto-Lock to Never while driving, or the phone will sleep and stop watching.';
+}
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && S.running) keepAwake(); });
+
+/* ============================== log ============================== */
+const COLS = ['time', 'rpm', 'mph', 'coolant_F', 'trans_F', 'volts', 'load_pct', 'stft1', 'ltft1', 'stft2', 'ltft2', 'trim_driver', 'trim_pass', 'iat_F', 'timing_deg',
+  'mis1', 'mis2', 'mis3', 'mis4', 'mis5', 'mis6', 'mis7', 'mis8', 'mil', 'codes', 'alerts'];
+function logRow(now) {
+  const d = S.data, M = S.mis, f1 = x => x == null ? '' : Math.round(x * 10) / 10;
+  S.log.push([new Date(now).toISOString(), f1(d.rpm), f1(d.mph), f1(d.coolantF), f1(d.transF), d.volts == null ? '' : Math.round(d.volts * 100) / 100, f1(d.load),
+    f1(d.stft1), f1(d.ltft1), f1(d.stft2), f1(d.ltft2), f1(d.trim1), f1(d.trim2), f1(d.iatF), f1(d.timing),
+    ...M.cur.map((c, i) => c == null ? '' : c - M.base[i]), S.codes.mil == null ? '' : (S.codes.mil ? 1 : 0),
+    [...S.codes.stored, ...S.codes.pending.map(c => c + '(p)')].join(' '), Object.keys(S.alerts).join(' ')]);
+  if (S.log.length > 12000) S.log.splice(0, S.log.length - 12000);
+  if (!S.logMeta) S.logMeta = { start: now, reader: S.elm ? S.elm.name : '', demo: S.demo };
+  if (S.log.length % 20 === 0) saveLog();
+}
+function saveLog() { store.set('th_meta', S.logMeta); if (!store.set('th_log', S.log)) { S.log.splice(0, Math.floor(S.log.length / 3)); store.set('th_log', S.log); } }
+window.addEventListener('pagehide', saveLog);
+function csv() { return [COLS.join(','), ...S.log.map(r => r.map(x => /[",\s]/.test(String(x)) ? '"' + String(x).replace(/"/g, '""') + '"' : x).join(','))].join('\n'); }
+function stats(idx, filt) {
+  let n = 0, s = 0, mn = Infinity, mx = -Infinity;
+  for (const r of S.log) { const v = r[idx]; if (v === '' || v == null || (filt && !filt(r))) continue; n++; s += +v; mn = Math.min(mn, +v); mx = Math.max(mx, +v); }
+  return n ? { min: mn, max: mx, avg: s / n, n } : null;
+}
+function summary() {
+  if (!S.log.length) return 'No drive data recorded yet.';
+  const first = new Date(S.log[0][0]), last = new Date(S.log[S.log.length - 1][0]);
+  const mins = Math.round((last - first) / 60000), run = r => +r[1] > 400, warm = r => +r[1] > 400 && +r[3] >= 160;
+  const line = (lbl, i, f, sign) => { const s = stats(i, f); if (!s) return `${lbl}: no data`; const g = x => (sign && x > 0 ? '+' : '') + Math.round(x * 10) / 10; return `${lbl}: min ${g(s.min)} / avg ${g(s.avg)} / max ${g(s.max)}`; };
+  const lastRow = S.log[S.log.length - 1], mis = lastRow.slice(15, 23).map(x => x === '' ? '-' : x).join(' ');
+  return [
+    `Silverado drive summary — ${first.toLocaleString()} · ${mins} min · ${S.log.length} samples${S.logMeta && S.logMeta.demo ? ' · DEMO DATA' : ''}`,
+    `Reader: ${(S.logMeta && S.logMeta.reader) || '?'} ${S.elmVer ? '(' + S.elmVer + ')' : ''}`,
+    line('Coolant °F (running)', 3, run), line('Trans °F', 4), line('Volts (running)', 5, run),
+    line('Fuel trim driver % (warm)', 11, warm, true), line('Fuel trim passenger % (warm)', 12, warm, true),
+    line('RPM', 1), line('Speed mph', 2), line('Load %', 6), line('Timing °', 14),
+    `Misfires this drive, cyl 1–8: ${mis}`,
+    `10-drive misfire average, cyl 1–8: ${S.mis.ewma.map(x => x == null ? '-' : x).join(' ')}`,
+    `Check engine light: ${S.codes.mil == null ? '?' : S.codes.mil ? 'ON' : 'off'} · Stored: ${S.codes.stored.join(', ') || 'none'} · Pending: ${S.codes.pending.join(', ') || 'none'}`,
+    `Alerts: ${S.history.length ? S.history.slice().reverse().map(h => `${hhmm(h.at)} ${h.title} (${h.level})`).join('; ') : 'none'}`,
+  ].join('\n');
+}
+
+/* ============================== UI ============================== */
+const TILES = [
+  { k: 'coolantF', label: 'Coolant', unit: '°F', f: r0, note: 'normal 195–225' },
+  { k: 'transF', label: 'Transmission', unit: '°F', f: r0, note: 'normal 150–210' },
+  { k: 'volts', label: 'Charging', unit: 'V', f: r1, note: 'running 12.6–14.8' },
+  { k: 'rpm', label: 'RPM', unit: '', f: r0, note: '' },
+  { k: 'trim1', label: 'Fuel trim · driver', unit: '%', f: sgn, note: 'ok within ±10' },
+  { k: 'trim2', label: 'Fuel trim · pass.', unit: '%', f: sgn, note: 'ok within ±10' },
+  { k: 'mph', label: 'Speed', unit: 'mph', f: r0, note: '' },
+  { k: 'load', label: 'Engine load', unit: '%', f: r0, note: '' },
+];
+function buildUI() {
+  $('#tiles').innerHTML = TILES.map(t => `<div class="tile na" id="t_${t.k}"><div class="t-label">${t.label}</div><div class="t-val">—</div><div class="t-note">${t.note}</div></div>`).join('');
+  const cyl = n => `<div class="cyl" id="c${n}"><div class="bar"><div class="fill"></div><div class="cnt">–</div></div><div class="lbl">${n}</div><div class="avg"></div></div>`;
+  $('#bank1').insertAdjacentHTML('beforeend', [1, 3, 5, 7].map(cyl).join(''));
+  $('#bank2').insertAdjacentHTML('beforeend', [2, 4, 6, 8].map(cyl).join(''));
+  setSwitch('#swSound', S.sound); setSwitch('#swVoice', S.voice);
+}
+function setSwitch(sel, on) { const el = $(sel); el.classList.toggle('on', on); el.setAttribute('aria-checked', on); }
+function status(t) { $('#status').textContent = t; }
+function render() {
+  const d = S.data;
+  for (const t of TILES) {
+    const el = $('#t_' + t.k), v = d[t.k], lv = (S.tileLv && S.tileLv[t.k]) || 'ok';
+    let na = v == null;
+    if (t.k === 'transF' && S.transSrc === false) { el.className = 'tile na'; el.querySelector('.t-val').textContent = 'n/a'; el.querySelector('.t-note').textContent = 'not shared by this truck'; continue; }
+    el.className = 'tile ' + (na ? 'na' : (t.note ? lv : ''));
+    el.querySelector('.t-val').innerHTML = na ? '—' : `${t.f(v)}<span class="u">${t.unit}</span>`;
+  }
+  // misfires
+  const M = S.mis, counts = M.cur.map((c, i) => c == null ? null : c - M.base[i]);
+  const top = Math.max(10, ...counts.filter(x => x != null));
+  for (let i = 0; i < 8; i++) {
+    const el = $('#c' + (i + 1)), n = counts[i], a = S.alerts['mis' + (i + 1)];
+    el.className = 'cyl' + (a ? ' ' + a.level : '');
+    el.querySelector('.cnt').textContent = n == null ? '–' : n;
+    el.querySelector('.fill').style.height = n == null ? '4%' : Math.max(4, n / top * 100) + '%';
+    el.querySelector('.avg').textContent = M.ewma[i] == null ? '' : 'avg ' + M.ewma[i];
+  }
+  $('#misNote').textContent = M.supported === false ? 'This truck isn\'t sharing per-cylinder misfire counts with this reader.' :
+    M.supported ? '"avg" = the computer\'s 10-drive average for that cylinder.' : (S.running ? 'Reading misfire counters…' : '');
+  // codes
+  const C = S.codes;
+  $('#milV').innerHTML = C.mil == null ? '—' : C.mil ? '<span class="dot alarm"></span>ON' : '<span class="dot ok"></span>Off';
+  $('#storedV').textContent = C.checked ? (C.stored.length ? C.stored.length : 'None') : '—';
+  $('#pendV').textContent = C.checked ? (C.pending.length ? C.pending.length : 'None') : '—';
+  const all = [...C.stored.map(c => [c, 'Stored']), ...C.pending.filter(c => !C.stored.includes(c)).map(c => [c, 'Pending'])];
+  $('#codeList').innerHTML = all.map(([c, k]) => `<span class="code"><b>${c}</b> · ${k}<br>${DTC_TEXT[c] || 'Look this one up'} · <a href="https://www.google.com/search?q=2019+Silverado+5.3+${c}" target="_blank" rel="noopener">Look up ›</a></span>`).join('');
+  // banner
+  const list = Object.values(S.alerts).sort((a, b) => LV[b.level] - LV[a.level] || b.at - a.at);
+  const bn = $('#banner'), top1 = list[0];
+  if (!S.running) { bn.className = 'banner'; $('#bTitle').textContent = 'Not connected'; $('#bMsg').textContent = 'Plug in the reader, start the truck, then tap Connect.'; $('#bMore').textContent = ''; $('#bRow').hidden = true; }
+  else if (!top1) { bn.className = 'banner ok'; $('#bTitle').textContent = 'All good'; $('#bMsg').textContent = 'Watching temps, charging, fuel trims, misfires and codes.'; $('#bMore').textContent = ''; $('#bRow').hidden = true; }
+  else {
+    bn.className = 'banner ' + top1.level; $('#bTitle').textContent = top1.title; $('#bMsg').textContent = top1.msg;
+    $('#bMore').textContent = list.length > 1 ? '+ ' + list.slice(1).map(a => a.title).join(' · ') : '';
+    $('#bRow').hidden = list.every(a => a.acked);
+  }
+  // history
+  $('#hist').innerHTML = S.history.length ? S.history.map(h => `<div><span class="tm">${hhmm(h.at)}</span><span><span class="dot ${h.level}"></span>${h.title}</span></div>`).join('')
+    : '<div><span class="tm"></span><span style="color:var(--muted)">None yet.</span></div>';
+  // log
+  const mins = S.log.length ? Math.round((new Date(S.log[S.log.length - 1][0]) - new Date(S.log[0][0])) / 60000) : 0;
+  $('#logLen').textContent = S.log.length ? `${mins} min · ${S.log.length} samples` : 'Empty';
+  // pill
+  const pill = $('#pill');
+  pill.className = 'pill' + (S.running ? (S.demo ? ' demo' : ' on') : '');
+  pill.textContent = S.running ? (S.demo ? 'Demo' : 'Live') : 'Not connected';
+}
+
+/* ============================== main loop ============================== */
+async function loop() {
+  let cycle = 0, okCycles = 0, t0 = Date.now();
+  while (S.running) {
+    const start = Date.now();
+    try {
+      const before = S.lastRx || 0;
+      await readFast();
+      if (cycle % 2 === 0) await readTrims();
+      if (cycle % 3 === 1) await readTrans();
+      await readMisfire(cycle % 8);
+      if (cycle % 30 === 0) await readStatus();
+      if (cycle % 60 === 2) await readPending();
+      const now = Date.now();
+      if ((S.lastRx || 0) > before && S.data.rpm != null) { S.lastOk = now; okCycles++; }
+      evaluate(now); render(); logRow(now);
+      const secs = (now - t0) / 1000; if (secs > 0) S.rate = okCycles / secs;
+      status(`${S.demo ? 'Demo truck' : 'Connected to ' + S.elm.name} · ${S.rate.toFixed(1)} updates/sec`);
+    } catch (e) {
+      if (e.message === 'disconnected') break;
+    }
+    cycle++;
+    const dt = Date.now() - start; if (dt < 700) await sleep(700 - dt);
+  }
+}
+
+async function start(demo) {
+  unlockAudio();
+  S.demo = demo; S.data = {}; S.alerts = {}; S.cond = {}; S.fails = {}; S.transSrc = null; S.transFails = 0; S.lastOk = 0; S.engineOnAt = null;
+  S.mis = { cur: Array(8).fill(null), ewma: Array(8).fill(null), base: Array(8).fill(null), hist: [[], [], [], [], [], [], [], []], supported: null, fails: 0 };
+  S.codes = { mil: null, stored: [], pending: [], checked: 0 };
+  if (demo || (S.logMeta && S.logMeta.demo)) { S.log = []; S.logMeta = null; S.history = []; }
+  try {
+    if (demo) { S.elm = new DemoElm(); }
+    else {
+      S.elm = new BleElm();
+      status('Pick your reader in the list…');
+      await S.elm.pick();
+      status('Connecting to ' + S.elm.name + '…');
+      await S.elm.attach();
+      S.elm.onDisconnect = onDrop;
+    }
+  } catch (e) {
+    S.elm = null;
+    if (e.message === 'NO_BT') status('This browser can\'t use Bluetooth. Open this page in the free Bluefy app.');
+    else if (e.message === 'NO_CHANNEL') status('Connected, but that reader has no open data channel — it may be locked to its own app.');
+    else if (/cancel/i.test(e.message) || e.name === 'NotFoundError') status('No reader picked.');
+    else status('Couldn\'t connect: ' + e.message);
+    return;
+  }
+  S.running = true; setButtons(); render(); keepAwake();
+  const ok = await initElm();
+  if (!ok) return;
+  status('Connected. Reading the truck…');
+  await loop();
+}
+async function onDrop() {
+  if (!S.running || S.demo) return;
+  status('Reader dropped. Reconnecting…'); S.header = null;
+  for (let i = 0; i < 5 && S.running; i++) {
+    await sleep(2500);
+    try { await S.elm.attach(); status('Reconnected.'); const ok = await initElm(); if (ok) { loop(); return; } } catch (e) {}
+  }
+  if (S.running) { stop(); status('Lost the reader. Tap Connect to try again.'); }
+}
+function stop() {
+  S.running = false; saveLog();
+  if (S.elm) S.elm.close();
+  try { S.wl && S.wl.release(); } catch (e) {}
+  S.alerts = {}; setButtons(); render(); status('Disconnected.');
+}
+function setButtons() {
+  $('#connectBtn').textContent = S.running ? 'Disconnect' : 'Connect to truck';
+  $('#connectBtn').className = S.running ? 'danger' : 'primary';
+  $('#demoBtn').disabled = S.running; $('#demoBtn').style.opacity = S.running ? .4 : 1;
+}
+
+/* ============================== wiring ============================== */
+$('#connectBtn').onclick = () => S.running ? stop() : start(false);
+$('#demoBtn').onclick = () => { if (!S.running) start(true); };
+$('#ackBtn').onclick = () => { for (const a of Object.values(S.alerts)) a.acked = true; S.muteUntil = Date.now() + 10 * 60000; render(); };
+$('#testBtn').onclick = () => { unlockAudio(); setTimeout(() => { beep('alarm'); if (S.voice) speak('Test. Alerts will sound like this.'); }, 150); };
+$('#swSound').onclick = () => { S.sound = !S.sound; store.set('th_sound', S.sound); setSwitch('#swSound', S.sound); if (S.sound) unlockAudio(); };
+$('#swVoice').onclick = () => { S.voice = !S.voice; store.set('th_voice', S.voice); setSwitch('#swVoice', S.voice); };
+$('#sumBtn').onclick = async () => {
+  const s = summary();
+  try { await navigator.clipboard.writeText(s); toast('Copied — paste it to Claude'); } catch (e) { sheet('Copy this and paste it to Claude', s); }
+};
+$('#csvBtn').onclick = async () => {
+  if (!S.log.length) { toast('Nothing recorded yet'); return; }
+  const text = csv(), name = 'silverado-' + new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-') + '.csv';
+  try { const f = new File([text], name, { type: 'text/csv' }); if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: name }); return; } }
+  catch (e) { if (e.name === 'AbortError') return; }
+  try { const url = URL.createObjectURL(new Blob([text], { type: 'text/csv' })); const a = document.createElement('a'); a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); toast('Saved ' + name); }
+  catch (e) { sheet('Full log (CSV)', text); }
+};
+$('#clearBtn').onclick = () => { S.log = []; S.logMeta = null; S.history = []; saveLog(); render(); toast('New log started'); };
+$('#sheetClose').onclick = () => $('#sheet').classList.remove('show');
+
+buildUI(); render(); setButtons();
+if (!navigator.bluetooth) status('Open this page in the free Bluefy app to connect. Demo works anywhere.');
+
+// test hooks
+window.__TH = { S, toBytes, cleanLines, parseDtcs, parseMode06, decodeDtc, summary, csv, LIMITS };
+})();
+</script>
+</body>
+</html>
