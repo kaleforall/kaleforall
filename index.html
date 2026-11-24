@@ -99,6 +99,14 @@
   .field input:focus{outline:2px solid var(--accent);outline-offset:1px}
   .cloud-state{font-size:14px;margin-top:2px;line-height:1.4}
   .cloud-state.ok{color:var(--ok)} .cloud-state.warn{color:var(--warn)} .cloud-state.err{color:#ff8a8c}
+  .verdict{font-size:18px;font-weight:800;margin:6px 0 4px;letter-spacing:-.2px}
+  .verdict.ok{color:var(--ok)} .verdict.warn{color:var(--warn)} .verdict.err{color:#ff6b6d} .verdict.na{color:var(--muted)}
+  .vnote{font-size:14px;color:var(--muted);line-height:1.4;margin-bottom:6px}
+  .grid3{display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:0;font-size:14.5px;margin-top:8px}
+  .grid3 div{padding:8px 0;border-top:1px solid var(--line)} .grid3 .h{color:var(--muted);font-size:12px;border-top:0;padding-top:0}
+  .grid3 .n{text-align:right;font-weight:700;font-variant-numeric:tabular-nums} .grid3 .n.warn{color:var(--warn)}
+  .mon{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line);font-size:14.5px}
+  .mon .ok{color:var(--ok);font-weight:700} .mon .no{color:var(--warn);font-weight:700}
   footer{color:var(--dim);font-size:12.5px;line-height:1.45;margin:14px 4px 0}
   footer b{color:var(--muted)}
   #toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#eef2f6;color:#0b0d10;
@@ -149,6 +157,24 @@
     <div class="row"><span class="k">Stored codes</span><span class="v" id="storedV">—</span></div>
     <div class="row"><span class="k">Pending codes (early warnings)</span><span class="v" id="pendV">—</span></div>
     <div id="codeList"></div>
+  </section>
+
+  <section class="card" id="smogCard">
+    <h2>Smog ready?</h2>
+    <div class="verdict na" id="smogVerdict">Connect to check.</div>
+    <div class="vnote" id="smogNote">Checks what a California smog test reads: check engine light, permanent codes and the truck's self-tests.</div>
+    <div id="smogList"></div>
+    <div class="hint" style="margin-top:10px">Before the test: unplug the Range, don't clear codes, and drive normally for a week or two.</div>
+    <div class="btns"><button class="small" id="smogBtn">Check now</button></div>
+  </section>
+
+  <section class="card" id="leakCard">
+    <h2>Exhaust leak check</h2>
+    <div class="verdict na" id="leakVerdict">Needs a warm engine.</div>
+    <div class="vnote" id="leakNote">A leak ahead of an oxygen sensor sucks in air at idle, so that side runs lean at idle and evens out at higher RPM.</div>
+    <div class="grid3" id="leakGrid"></div>
+    <div class="hint" id="leakTestMsg" style="margin-top:10px">Parked test, engine warm: idle 60 s, then hold about 2,500 RPM for 30 s.</div>
+    <div class="btns"><button class="small primary" id="leakBtn">Run 2-minute parked test</button></div>
   </section>
 
   <section class="card">
@@ -350,7 +376,8 @@ class DemoTruck {
   vals() {
     const t = this.t(), j = a => (Math.random() - .5) * 2 * a;
     let rpm, mph, load;
-    if (t < 8) { rpm = 600 + j(15); mph = 0; load = 18 + j(2); }
+    const stop = t > 60 && (t % 120) > 95;   // sits at a light now and then
+    if (t < 8 || stop) { rpm = 600 + j(15); mph = 0; load = 18 + j(2); }
     else if (t < 20) { const k = (t - 8) / 12; rpm = 600 + k * 1600 + j(40); mph = k * 45; load = 55 + j(6); }
     else { mph = 50 + 8 * Math.sin(t / 25) + j(1); rpm = 1250 + mph * 6 + j(40); load = 30 + j(6); }
     const coolC = 66 + Math.min(1, t / 40) * 27 + j(.4);
@@ -358,7 +385,8 @@ class DemoTruck {
     if (t > 45) transC = Math.min(108, transC + (t - 45) * 0.6);
     // cylinder 3 starts missing after 40 s
     if (t > 40 && t - this.lastMisT >= 3) { this.mis[2] += 1; this.lastMisT = t; }
-    return { rpm, mph, load, coolC, transC, volts: rpm > 400 ? 14.25 + j(.08) : 12.6, stft1: 2 + j(3), ltft1: 4, stft2: 1 + j(3), ltft2: 5, iat: 24, timing: 18 + j(6) };
+    const leak = mph < 1 && t > 40 ? 9 : 0;   // demo: small driver-side manifold leak shows at idle
+    return { rpm, mph, load, coolC, transC, volts: rpm > 400 ? 14.25 + j(.08) : 12.6, stft1: 2 + leak + j(3), ltft1: 4, stft2: 1 + j(3), ltft2: 5, iat: 24, timing: 18 + j(6), o2r1: 0.68 + j(.05), o2r2: 0.7 + j(.05) };
   }
   hex(b) { return b.map(x => x.toString(16).toUpperCase().padStart(2, '0')).join(this.spaces ? ' ' : ''); }
   frames(b) {
@@ -390,8 +418,8 @@ class DemoTruck {
     if (m === '01') {
       const P = parseInt(p, 16), w = x => [(x >> 8) & 255, x & 255], tr = x => Math.round(x * 128 / 100 + 128);
       const map = {
-        0x00: [0xBF, 0xBF, 0xA8, 0x13], 0x20: [0x80, 0x00, 0x00, 0x01], 0x40: [0x40, 0x00, 0x00, 0x00],
-        0x01: [0x00, 0x07, 0xE5, 0x00], 0x04: [Math.round(v.load * 2.55)], 0x05: [Math.round(v.coolC + 40)],
+        0x00: [0xBF, 0xBF, 0xA8, 0x93], 0x20: [0x80, 0x00, 0x00, 0x01], 0x40: [0x40, 0x00, 0x00, 0x00],
+        0x01: [0x00, 0x07, 0xE5, 0x04], 0x13: [0x33], 0x15: [Math.round(v.o2r1 * 200), 0xFF], 0x19: [Math.round(v.o2r2 * 200), 0xFF], 0x30: [84], 0x31: w(1996), 0x04: [Math.round(v.load * 2.55)], 0x05: [Math.round(v.coolC + 40)],
         0x06: [tr(v.stft1)], 0x07: [tr(v.ltft1)], 0x08: [tr(v.stft2)], 0x09: [tr(v.ltft2)],
         0x0C: w(Math.round(v.rpm * 4)), 0x0D: [Math.round(v.mph / 0.621371)], 0x0E: [Math.round((v.timing + 64) * 2)],
         0x0F: [v.iat + 40], 0x42: w(Math.round(v.volts * 1000)),
@@ -403,6 +431,7 @@ class DemoTruck {
       return r([0x46, mid, 0x0B, 0x24, 0, this.ewma[i], 0, 0, 0xFF, 0xFF, mid, 0x0C, 0x24, (this.mis[i] >> 8) & 255, this.mis[i] & 255, 0, 0, 0xFF, 0xFF]);
     }
     if (m === '03') return r([0x43, 0x00]);
+    if (m === '0A') return r([0x4A, 0x00]);
     if (m === '07') return t > 90 ? r([0x47, 0x01, 0x03, 0x03]) : r([0x47, 0x00]);
     if (m === '22') return r([0x7F, 0x22, 0x31]);
     return 'NO DATA';
@@ -453,7 +482,7 @@ async function q06(mid) {
   return parseMode06(toBytes(l));
 }
 async function qDtc(mode) {
-  const l = await safe('0' + mode, 4000); if (!l) return null; if (isError(l)) return l.some(x => /NO DATA/i.test(x)) ? [] : null;
+  const l = await safe(mode.toString(16).toUpperCase().padStart(2, '0'), 4000); if (!l) return null; if (isError(l)) return l.some(x => /NO DATA/i.test(x)) ? [] : null;
   return parseDtcs(toBytes(l), mode);
 }
 const has = pid => !S.sup || S.sup.has(pid);
@@ -492,7 +521,12 @@ async function readTrims() {
   if (has(0x08)) { d.stft2 = tr(await q01('08')); d.ltft2 = tr(await q01('09')); }
   d.trim1 = d.stft1 != null && d.ltft1 != null ? d.stft1 + d.ltft1 : null;
   d.trim2 = d.stft2 != null && d.ltft2 != null ? d.stft2 + d.ltft2 : null;
-  let b = await q01('0F'); if (b && b[0] > 0) d.iatF = cToF(b[0] - 40);
+  S.trimStamp = Date.now();
+  let b;
+  if (has(0x15)) { b = await q01('15'); d.o2r1 = b && b[0] > 0 ? b[0] / 200 : null; }   // rear (after-converter) O2, driver side
+  if (has(0x19)) { b = await q01('19'); d.o2r2 = b && b[0] > 0 ? b[0] / 200 : null; }   // rear O2, passenger side
+  if (S.leakTest) return;                                                               // keep the test fast
+  b = await q01('0F'); if (b && b[0] > 0) d.iatF = cToF(b[0] - 40);
   b = await q01('0E'); if (b) d.timing = b[0] / 2 - 64;
 }
 async function readTrans() {
@@ -527,6 +561,135 @@ async function readStatus() {
   S.codes.mil = !!(b[0] & 0x80); const n = b[0] & 0x7f;
   if (n > 0 || S.codes.mil) { const s = await qDtc(3); if (s) S.codes.stored = s; } else S.codes.stored = [];
   S.codes.checked = Date.now();
+  // smog readiness
+  const sm = { at: Date.now(), mil: S.codes.mil, monitors: parseReadiness(b), permanent: null, miles: null, warmups: null };
+  const pc = await qDtc(0x0A); sm.permanent = pc;
+  let x = await q01('31'); if (x) sm.miles = Math.round(((x[0] << 8) | x[1]) * 0.621371);
+  x = await q01('30'); if (x) sm.warmups = x[0];
+  S.smog = sm;
+}
+function parseReadiness(b) {
+  const B = b[1], C = b[2], D = b[3], out = [];
+  for (const [name, i] of [['Misfire', 0], ['Fuel system', 1], ['Engine parts', 2]]) if (B & (1 << i)) out.push({ name, ready: !(B & (1 << (i + 4))) });
+  const spark = !(B & 0x08);
+  const list = spark ? [['Catalytic converter', 0], ['Heated catalyst', 1], ['EVAP (fuel vapor)', 2], ['Secondary air', 3], ['A/C', 4], ['Oxygen sensors', 5], ['O2 sensor heaters', 6], ['EGR / cam timing', 7]]
+                     : [['NMHC catalyst', 0], ['NOx treatment', 1], ['Boost pressure', 3], ['Exhaust gas sensor', 5], ['Particulate filter', 6], ['EGR / VVT', 7]];
+  for (const [name, i] of list) if (C & (1 << i)) out.push({ name, ready: !(D & (1 << i)) });
+  return out;
+}
+function smogVerdict(sm) {
+  if (!sm) return { cls: 'na', title: S.running ? 'Checking…' : 'Connect to check.', note: '' };
+  if (sm.mil) return { cls: 'err', title: 'Would fail: check engine light is on', note: 'Fix the code first. Stored: ' + (S.codes.stored.join(', ') || 'reading…') };
+  if (sm.permanent && sm.permanent.length) return { cls: 'err', title: 'Would fail: permanent code ' + sm.permanent.join(', '), note: 'It clears itself after the truck re-tests that system and passes — usually a few days of normal driving once it\'s fixed.' };
+  const nr = sm.monitors.filter(m => !m.ready);
+  if (nr.length) return { cls: 'warn', title: 'Not ready yet', note: nr.map(m => m.name).join(', ') + ' still finishing ' + (nr.length > 1 ? 'their' : 'its') + ' self-test. Drive normally for about a week, then check again.' };
+  if (sm.permanent == null) return { cls: 'warn', title: 'Looks ready', note: 'All self-tests done and the light is off, but this reader couldn\'t read permanent codes.' };
+  return { cls: 'ok', title: 'Smog ready ✓', note: 'Light off, no permanent codes, every self-test complete.' };
+}
+
+/* ============================== exhaust leak check ============================== */
+const newLeak = () => ({ idle: { n: 0, a: 0, b: 0 }, cruise: { n: 0, a: 0, b: 0 }, cold: { n: 0, a: 0, b: 0 }, o2: { n: 0, a: 0, b: 0 }, last: 0 });
+S.leak = newLeak(); S.leakTest = null;
+const addAB = (o, a, b) => { o.n++; o.a += a; o.b += b; };
+const avgAB = o => o.n ? [o.a / o.n, o.b / o.n] : null;
+function trackLeak(now) {
+  const d = S.data, L = S.leak;
+  if (!S.trimStamp || S.trimStamp <= L.last) return; L.last = S.trimStamp;
+  const t1 = d.trim1, t2 = d.trim2;
+  if (t1 == null || t2 == null || Math.abs(t1) > 40 || Math.abs(t2) > 40 || d.rpm == null || d.rpm < 450) return;   // skip fuel-cut and open loop
+  const cool = d.coolantF, mph = d.mph || 0, rpm = d.rpm, load = d.load || 0;
+  if (cool >= 100 && cool < 150 && mph < 1 && rpm < 1300) addAB(L.cold, t1, t2);
+  if (cool < 170) return;
+  if (mph < 1 && rpm < 950 && load < 35) addAB(L.idle, t1, t2);
+  if (mph >= 30 && rpm >= 1200 && rpm <= 2600 && load >= 12 && load <= 65) { addAB(L.cruise, t1, t2); if (d.o2r1 != null && d.o2r2 != null) addAB(L.o2, d.o2r1, d.o2r2); }
+  if (S.leakTest) stepLeakTest(now, t1, t2);
+}
+function leakFindings(idle, high, o2) {
+  const out = [], side = ['Driver side (cyl 1-3-5-7)', 'Passenger side (cyl 2-4-6-8)'];
+  if (idle && high) {
+    for (const k of [0, 1]) {
+      const i = idle[k], g = idle[k] - high[k], other = idle[1 - k];
+      if (i >= 8 && g >= 6 && i - other >= 5) out.push(`${side[k]}: ${sgn(i)}% at idle vs ${sgn(high[k])}% at higher RPM — air getting in ahead of the front O2 sensor. Classic manifold or gasket leak sign on that side.`);
+    }
+    if (!out.length && idle[0] >= 10 && idle[1] >= 10 && Math.abs(idle[0] - idle[1]) < 5)
+      out.push(`Both sides lean at idle (${sgn(idle[0])}% / ${sgn(idle[1])}%). That points to an intake vacuum leak more than exhaust.`);
+  }
+  if (o2) for (const k of [0, 1]) if (o2[k] < 0.35 && o2[1 - k] > 0.5)
+    out.push(`${side[k]}: rear O2 sensor reads lean (${o2[k].toFixed(2)} V vs ${o2[1 - k].toFixed(2)} V). Possible leak between the manifold and the converter on that side.`);
+  return out;
+}
+function leakVerdict() {
+  const L = S.leak, idle = avgAB(L.idle), cruise = avgAB(L.cruise), o2 = L.o2.n >= 30 ? avgAB(L.o2) : null;
+  if (S.leakTestResult) return S.leakTestResult;
+  if (L.idle.n < 30 || L.cruise.n < 40) {
+    const need = []; if (L.idle.n < 30) need.push(`warm idle ${Math.min(100, Math.round(L.idle.n / 30 * 100))}%`); if (L.cruise.n < 40) need.push(`warm cruising ${Math.min(100, Math.round(L.cruise.n / 40 * 100))}%`);
+    return { cls: 'na', title: 'Collecting data…', note: 'Needs: ' + need.join(', ') + '. Or run the parked test below.' };
+  }
+  const f = leakFindings(idle, cruise, o2);
+  return f.length ? { cls: 'warn', title: 'Possible exhaust leak', note: f.join(' ') }
+                  : { cls: 'ok', title: 'No sign of a leak ahead of the sensors', note: 'Both sides fuel the same at idle and at speed. A small leak can still make noise without showing here — the stethoscope test rules.' };
+}
+function startLeakTest() {
+  if (!S.running) { toast('Connect to the truck first'); return; }
+  const d = S.data;
+  if (d.coolantF == null || d.coolantF < 170) { toast('Warm up first — coolant needs 170°F+'); return; }
+  if ((d.mph || 0) > 1) { toast('Park first'); return; }
+  S.leakTestResult = null;
+  S.leakTest = { phase: 'idle', start: Date.now(), idle: { n: 0, a: 0, b: 0 }, high: { n: 0, a: 0, b: 0 } };
+  unlockAudio(); speak('Leak test. Let it idle in park.'); renderLeak();
+}
+function stepLeakTest(now, t1, t2) {
+  const T = S.leakTest, d = S.data, el = (now - T.start) / 1000;
+  if ((d.mph || 0) > 1) { S.leakTest = null; toast('Test stopped — truck moved'); return; }
+  if (T.phase === 'idle') {
+    if (d.rpm < 950) addAB(T.idle, t1, t2);
+    if (el >= 60) { T.phase = 'rev'; T.start = now; beep('warn'); speak('Now hold about twenty five hundred R P M.'); }
+  } else if (T.phase === 'rev') {
+    if (d.rpm >= 2000 && d.rpm <= 3200) addAB(T.high, t1, t2);
+    if (el >= 45 || T.high.n >= 20) finishLeakTest();
+  }
+}
+function finishLeakTest() {
+  const T = S.leakTest; S.leakTest = null;
+  const idle = avgAB(T.idle), high = avgAB(T.high);
+  speak('Test done. You can let off.');
+  if (!idle || !high || T.idle.n < 15 || T.high.n < 8) { S.leakTestResult = { cls: 'na', title: 'Test didn\'t get enough data', note: 'Hold 2,000–3,000 RPM steady for the second part. Try again.' }; renderLeak(); return; }
+  S.leak.test = { idle, high, at: Date.now() };
+  const f = leakFindings(idle, high, null);
+  S.leakTestResult = f.length ? { cls: 'warn', title: 'Possible exhaust leak', note: f.join(' ') }
+    : { cls: 'ok', title: 'No sign of a leak ahead of the sensors', note: `Idle ${sgn(idle[0])}% / ${sgn(idle[1])}%, at 2,500 RPM ${sgn(high[0])}% / ${sgn(high[1])}%. Both sides behave the same.` };
+  renderLeak();
+}
+function renderLeak() {
+  const v = leakVerdict(), L = S.leak, T = S.leakTest;
+  const vEl = $('#leakVerdict'); vEl.className = 'verdict ' + v.cls; vEl.textContent = T ? (T.phase === 'idle' ? 'Test: idle in Park…' : 'Test: hold about 2,500 RPM') : v.title;
+  $('#leakNote').textContent = T ? (T.phase === 'idle' ? `${Math.max(0, 60 - Math.round((Date.now() - T.start) / 1000))} s left. Don't touch the gas.` : 'Keep it steady until it says done.') : v.note;
+  const cell = (x, warn) => `<div class="n${warn ? ' warn' : ''}">${x}</div>`;
+  const row = (label, ab, fmt, warnFn) => ab ? `<div>${label}</div>${cell(fmt(ab[0]), warnFn && warnFn(ab[0], ab[1]))}${cell(fmt(ab[1]), warnFn && warnFn(ab[1], ab[0]))}` : '';
+  const trimWarn = (x, o) => x >= 8 && x - o >= 5, f = x => sgn(x) + '%';
+  const test = L.test;
+  const rows = [
+    row('Warm idle', avgAB(L.idle), f, trimWarn), row('Cruising', avgAB(L.cruise), f), row('Cold idle', avgAB(L.cold), f),
+    test ? row('Test: idle', test.idle, f, trimWarn) : '', test ? row('Test: 2,500 RPM', test.high, f) : '',
+    row('Rear O2 at cruise', L.o2.n >= 10 ? avgAB(L.o2) : null, x => x.toFixed(2) + ' V', (x, o) => x < 0.35 && o > 0.5),
+  ].join('');
+  $('#leakGrid').innerHTML = rows ? '<div class="h"></div><div class="h n">Driver</div><div class="h n">Passenger</div>' + rows : '';
+  $('#leakBtn').textContent = T ? 'Cancel test' : 'Run 2-minute parked test';
+}
+function renderSmog() {
+  const sm = S.smog, v = smogVerdict(sm), el = $('#smogVerdict');
+  el.className = 'verdict ' + v.cls; el.textContent = v.title;
+  $('#smogNote').textContent = v.note || 'Checks what a California smog test reads: check engine light, permanent codes and the truck\'s self-tests.';
+  if (!sm) { $('#smogList').innerHTML = ''; return; }
+  const mon = sm.monitors.map(m => `<div class="mon"><span>${m.name}</span><span class="${m.ready ? 'ok' : 'no'}">${m.ready ? '✓ Ready' : 'Not ready'}</span></div>`).join('');
+  const extra = `<div class="mon"><span>Permanent codes</span><span class="${sm.permanent && sm.permanent.length ? 'no' : 'ok'}">${sm.permanent == null ? '—' : sm.permanent.length ? sm.permanent.join(', ') : '✓ None'}</span></div>`
+    + (sm.miles != null ? `<div class="mon"><span>Since codes were last cleared</span><span>${sm.miles.toLocaleString()} mi${sm.warmups != null ? ' · ' + sm.warmups + ' warm-ups' : ''}</span></div>` : '');
+  $('#smogList').innerHTML = mon + extra;
+}
+function smogLine() { const sm = S.smog; if (!sm) return 'Smog ready: not checked'; const v = smogVerdict(sm); return `Smog ready: ${v.title}${v.cls === 'warn' ? ' — ' + v.note : ''}${sm.miles != null ? ` (codes last cleared ${sm.miles} mi ago)` : ''}`; }
+function leakLine() {
+  const L = S.leak, i = avgAB(L.idle), c = avgAB(L.cruise), k = avgAB(L.cold), o = L.o2.n >= 10 ? avgAB(L.o2) : null, v = leakVerdict(), f = a => a ? `${sgn(a[0])}/${sgn(a[1])}%` : 'n/a';
+  return `Leak check (driver/passenger): warm idle ${f(i)}, cruise ${f(c)}, cold idle ${f(k)}, rear O2 ${o ? o[0].toFixed(2) + '/' + o[1].toFixed(2) + ' V' : 'n/a'}${L.test ? `, parked test idle ${f(L.test.idle)} vs 2500 rpm ${f(L.test.high)}` : ''} → ${v.title}`;
 }
 async function readPending() {
   const a = await qDtc(7) || [];
@@ -711,6 +874,7 @@ function summary(rows, opts) {
     `${pre}Misfires once warm (160°F+), cyl 1–8: ${S.mis.warm.join(' ')}`,
     `${pre}10-drive misfire average, cyl 1–8: ${S.mis.ewma.map(x => x == null ? '-' : x).join(' ')}`,
     `${pre}Check engine light: ${lastRow[23] === '' ? '?' : +lastRow[23] ? 'ON' : 'off'} · Codes at end: ${codes || 'none'} ((p) = pending)`,
+    pre + smogLine(), pre + leakLine(),
     `${pre}Alerts: ${hist.length ? hist.map(h => `${hhmm(h.at)} ${h.title} (${h.level})`).join('; ') : 'none'}`,
   ].filter(x => x != null).join('\n');
 }
@@ -878,7 +1042,7 @@ function render() {
   const pill = $('#pill');
   pill.className = 'pill' + (S.running ? (S.demo ? ' demo' : ' on') : '');
   pill.textContent = S.running ? (S.demo ? 'Demo' : 'Live') : 'Not connected';
-  renderCloud();
+  renderCloud(); renderSmog(); renderLeak();
 }
 
 /* ============================== main loop ============================== */
@@ -889,14 +1053,14 @@ async function loop() {
     try {
       const before = S.lastRx || 0;
       await readFast();
-      if (cycle % 2 === 0) await readTrims();
+      if (cycle % 2 === 0 || S.leakTest) await readTrims();
       if (cycle % 3 === 1) await readTrans();
-      await readMisfire(cycle % 8);
-      if (cycle % 30 === 0) await readStatus();
+      if (!S.leakTest) await readMisfire(cycle % 8);
+      if (cycle % 30 === 0 || S.smogNow) { S.smogNow = false; await readStatus(); }
       if (cycle % 60 === 2) await readPending();
       const now = Date.now();
       if ((S.lastRx || 0) > before && S.data.rpm != null) { S.lastOk = now; okCycles++; }
-      evaluate(now); trackDrive(now); render(); logRow(now);
+      evaluate(now); trackDrive(now); trackLeak(now); render(); logRow(now);
       const secs = (now - t0) / 1000; if (secs > 0) S.rate = okCycles / secs;
       status(`${S.demo ? 'Demo truck' : 'Connected to ' + S.elm.name} · ${S.rate.toFixed(1)} updates/sec`);
     } catch (e) {
@@ -912,6 +1076,7 @@ async function start(demo) {
   S.demo = demo; S.data = {}; S.alerts = {}; S.cond = {}; S.fails = {}; S.transSrc = null; S.transFails = 0; S.lastOk = 0; S.engineOnAt = null;
   S.mis = { cur: Array(8).fill(null), ewma: Array(8).fill(null), base: Array(8).fill(null), warm: Array(8).fill(0), hist: [[], [], [], [], [], [], [], []], supported: null, fails: 0 };
   S.codes = { mil: null, stored: [], pending: [], checked: 0 };
+  S.smog = null; S.leak = newLeak(); S.leakTest = null; S.leakTestResult = null;
   if (demo || (S.logMeta && S.logMeta.demo)) { S.log = []; S.logMeta = null; S.history = []; }
   try {
     if (demo) { S.elm = new DemoElm(); }
@@ -981,6 +1146,8 @@ $('#clearBtn').onclick = () => { S.log = []; S.logMeta = null; S.history = []; s
 $('#sheetClose').onclick = () => $('#sheet').classList.remove('show');
 
 $('#cfgSave').onclick = testCloud;
+$('#smogBtn').onclick = () => { if (!S.running) { toast('Connect to the truck first'); return; } S.smogNow = true; S.smog = null; renderSmog(); };
+$('#leakBtn').onclick = () => { if (S.leakTest) { S.leakTest = null; renderLeak(); return; } startLeakTest(); };
 $('#cfgFlush').onclick = () => { S.cloudMsg = null; if (!S.queue.length) { toast('Nothing waiting'); renderCloud(); return; } flushQueue(); };
 $('#cfgRepo').value = S.cfg.repo || 'kaleforall/truck-logs'; $('#cfgToken').value = S.cfg.token || '';
 
@@ -988,7 +1155,7 @@ buildUI(); render(); setButtons(); checkStaleDrive(); flushQueue();
 if (!navigator.bluetooth) status('Open this page in the free Bluefy app to connect. Demo works anywhere.');
 
 // test hooks
-window.__TH = { S, toBytes, cleanLines, parseDtcs, parseMode06, decodeDtc, summary, csv, LIMITS, finishDrive, trackDrive, flushQueue };
+window.__TH = { S, toBytes, cleanLines, parseDtcs, parseMode06, decodeDtc, summary, csv, LIMITS, finishDrive, trackDrive, flushQueue, parseReadiness, smogVerdict, leakFindings, leakVerdict };
 })();
 </script>
 </body>
