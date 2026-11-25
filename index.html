@@ -107,6 +107,9 @@
   .grid3 .n{text-align:right;font-weight:700;font-variant-numeric:tabular-nums} .grid3 .n.warn{color:var(--warn)}
   .mon{display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--line);font-size:14.5px}
   .mon .ok{color:var(--ok);font-weight:700} .mon .no{color:var(--warn);font-weight:700}
+  .scanbar{height:8px;background:var(--card2);border-radius:99px;overflow:hidden;margin:8px 0 2px}
+  .scanbar .fill{height:100%;width:0;background:var(--accent);transition:width .3s}
+  .scanbar[hidden],[hidden]{display:none!important}
   footer{color:var(--dim);font-size:12.5px;line-height:1.45;margin:14px 4px 0}
   footer b{color:var(--muted)}
   #toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#eef2f6;color:#0b0d10;
@@ -175,6 +178,14 @@
     <div class="grid3" id="leakGrid"></div>
     <div class="hint" id="leakTestMsg" style="margin-top:10px">Parked test, engine warm: idle 60 s, then hold about 2,500 RPM for 30 s.</div>
     <div class="btns"><button class="small primary" id="leakBtn">Run 2-minute parked test</button></div>
+  </section>
+
+  <section class="card" id="scanCard">
+    <h2>Scan everything</h2>
+    <div class="verdict na" id="scanVerdict">Not run yet</div>
+    <div class="vnote" id="scanNote">Finds every value your truck will share so Claude can build dashboards from it. Park with the engine running and keep this screen on. Takes about 10 minutes, and it tells you when to rev.</div>
+    <div class="scanbar" id="scanBar" hidden><div class="fill" id="scanFill"></div></div>
+    <div class="btns"><button class="small primary" id="scanBtn">Start scan</button><button class="small" id="scanExp" hidden>Export scan</button></div>
   </section>
 
   <section class="card">
@@ -370,8 +381,10 @@ class BleElm {
   close() { try { if (this.connected) this.device.gatt.disconnect(); } catch (e) {} }
 }
 
+const DEMO_VIN = 'DEMOVIN0123456789';
+const asc = str => [...str].map(c => c.charCodeAt(0));
 class DemoTruck {
-  constructor(speed) { this.speed = speed || 1; this.t0 = Date.now(); this.header = ECM; this.echo = true; this.spaces = true; this.mis = [0, 0, 0, 0, 0, 0, 0, 0]; this.ewma = [0, 1, 0, 0, 0, 0, 1, 0]; this.lastMisT = 0; }
+  constructor(speed) { this.speed = speed || 1; this.t0 = Date.now(); this.header = ECM; this.echo = true; this.spaces = true; this.hdrs = false; this.cra = null; this.mis = [0, 0, 0, 0, 0, 0, 0, 0]; this.ewma = [0, 1, 0, 0, 0, 0, 1, 0]; this.lastMisT = 0; }
   t() { return (Date.now() - this.t0) / 1000 * this.speed; }
   vals() {
     const t = this.t(), j = a => (Math.random() - .5) * 2 * a;
@@ -380,6 +393,7 @@ class DemoTruck {
     if (t < 8 || stop) { rpm = 600 + j(15); mph = 0; load = 18 + j(2); }
     else if (t < 20) { const k = (t - 8) / 12; rpm = 600 + k * 1600 + j(40); mph = k * 45; load = 55 + j(6); }
     else { mph = 50 + 8 * Math.sin(t / 25) + j(1); rpm = 1250 + mph * 6 + j(40); load = 30 + j(6); }
+    if (window.__demoParked) { rpm = window.__demoRpm || 600 + j(15); mph = 0; load = 18 + j(2); }
     const coolC = 66 + Math.min(1, t / 40) * 27 + j(.4);
     let transC = 45 + Math.min(1, t / 50) * 40;
     if (t > 45) transC = Math.min(108, transC + (t - 45) * 0.6);
@@ -395,28 +409,59 @@ class DemoTruck {
     let k = 1; for (let i = 6; i < b.length; i += 7) { lines.push((k % 16).toString(16).toUpperCase() + ':' + sp + this.hex(b.slice(i, i + 7))); k++; }
     return lines.join('\r');
   }
+  framesH(id, b) {                                   // headers on: raw CAN frames with the ISO-TP byte showing
+    const sp = this.spaces ? ' ' : '';
+    if (b.length <= 7) return id + sp + this.hex([b.length, ...b]);
+    const lines = [id + sp + this.hex([0x10 | (b.length >> 8), b.length & 255, ...b.slice(0, 6)])];
+    let k = 1; for (let i = 6; i < b.length; i += 7) { lines.push(id + sp + this.hex([0x20 | (k % 16), ...b.slice(i, i + 7)])); k++; }
+    return lines.join('\r');
+  }
   respond(cmdIn) {
     const cmd = cmdIn.trim().toUpperCase().replace(/\s/g, ''); let out;
-    if (cmd === 'ATZ') { this.echo = true; this.spaces = true; out = '\r\rELM327 v1.5'; }
+    if (cmd === 'ATZ') { this.echo = true; this.spaces = true; this.hdrs = false; this.cra = null; this.header = '7DF'; out = '\r\rELM327 v1.5'; }
     else if (cmd === 'ATI') out = 'ELM327 v1.5';
     else if (/^ATE[01]$/.test(cmd)) { this.echo = cmd === 'ATE1'; out = 'OK'; }
     else if (/^ATS[01]$/.test(cmd)) { this.spaces = cmd === 'ATS1'; out = 'OK'; }
+    else if (/^ATH[01]$/.test(cmd)) { this.hdrs = cmd === 'ATH1'; out = 'OK'; }
+    else if (cmd.startsWith('ATCRA')) { this.cra = cmd.slice(5) || null; out = 'OK'; }
+    else if (cmd === 'ATAR') { this.cra = null; out = 'OK'; }
     else if (cmd.startsWith('ATSH')) { this.header = cmd.slice(4); out = 'OK'; }
     else if (cmd === 'ATRV') out = (this.vals().volts).toFixed(1) + 'V';
     else if (cmd.startsWith('AT')) out = 'OK';
-    else out = this.obd(cmd);
+    else {
+      const msgs = this.msgs(cmd);
+      out = msgs && msgs.length ? msgs.map(([id, b]) => this.hdrs ? this.framesH(id, b) : this.frames(b)).join('\r') : 'NO DATA';
+    }
     return (this.echo ? cmdIn + '\r' : '') + out + '\r\r>';
   }
-  obd(cmd) {
-    const v = this.vals(), t = this.t(), m = cmd.slice(0, 2), p = cmd.slice(2);
-    const r = b => this.frames(b);
-    if (this.header === TCM) {
-      if (cmd === '221940') return r([0x62, 0x19, 0x40, Math.round(v.transC + 40)]);
-      if (m === '07' || m === '03') return r([0x40 + parseInt(m, 16), 0x00]);
-      return 'NO DATA';
+  msgs(cmd) {
+    const h = this.header;
+    if (h === '7DF') { const out = [], e = this.ecm(cmd); if (e) out.push(['7E8', e]); if (cmd === '0100') out.push(['7EA', this.tcm(cmd)]); return out; }
+    if (h === TCM) { const b = this.tcm(cmd); return b ? [['7EA', b]] : null; }
+    if (h === '241' || h === '243') {                 // two body modules: only heard when the reader listens for them
+      const resp = (parseInt(h, 16) + 0x400).toString(16).toUpperCase(); if (this.cra !== resp) return null;
+      if (cmd === '1AB0') return [[resp, [0x5A, 0xB0, parseInt(h, 16) & 255]]];
+      if (h === '241' && cmd === '1A90') return [[resp, [0x5A, 0x90, ...asc(DEMO_VIN)]]];
+      return cmd.startsWith('1A') ? [[resp, [0x7F, 0x1A, 0x31]]] : null;
     }
+    if (h !== ECM) return null;
+    const b = this.ecm(cmd); return b ? [['7E8', b]] : null;
+  }
+  tcm(cmd) {
+    const v = this.vals(), m = cmd.slice(0, 2), id = parseInt(cmd.slice(2), 16);
+    if (cmd === '0100') return [0x41, 0x00, 0x00, 0x00, 0x00, 0x00];
+    if (m === '07' || m === '03') return [0x40 + parseInt(m, 16), 0x00];
+    if (m === '22') {
+      const g = { 0x1940: () => [Math.round(v.transC + 40)], 0x199A: () => [v.mph < 1 ? 0 : 6], 0x1941: () => [0, Math.round(v.rpm / 40)] }[id];
+      return g ? [0x62, id >> 8, id & 255, ...g()] : [0x7F, 0x22, 0x31];
+    }
+    if (m === '1A') return id === 0xB0 ? [0x5A, 0xB0, 0x18] : [0x7F, 0x1A, 0x31];
+    return null;
+  }
+  ecm(cmd) {
+    const v = this.vals(), t = this.t(), m = cmd.slice(0, 2), p = cmd.slice(2), P = parseInt(p, 16);
     if (m === '01') {
-      const P = parseInt(p, 16), w = x => [(x >> 8) & 255, x & 255], tr = x => Math.round(x * 128 / 100 + 128);
+      const w = x => [(x >> 8) & 255, x & 255], tr = x => Math.round(x * 128 / 100 + 128);
       const map = {
         0x00: [0xBF, 0xBF, 0xA8, 0x93], 0x20: [0x80, 0x00, 0x00, 0x01], 0x40: [0x40, 0x00, 0x00, 0x00],
         0x01: [0x00, 0x07, 0xE5, 0x04], 0x13: [0x33], 0x15: [Math.round(v.o2r1 * 200), 0xFF], 0x19: [Math.round(v.o2r2 * 200), 0xFF], 0x30: [84], 0x31: w(1996), 0x04: [Math.round(v.load * 2.55)], 0x05: [Math.round(v.coolC + 40)],
@@ -424,17 +469,30 @@ class DemoTruck {
         0x0C: w(Math.round(v.rpm * 4)), 0x0D: [Math.round(v.mph / 0.621371)], 0x0E: [Math.round((v.timing + 64) * 2)],
         0x0F: [v.iat + 40], 0x42: w(Math.round(v.volts * 1000)),
       };
-      return map[P] ? r([0x41, P, ...map[P]]) : 'NO DATA';
+      return map[P] ? [0x41, P, ...map[P]] : null;
     }
     if (m === '06') {
-      const mid = parseInt(p, 16), i = mid - 0xA2; if (i < 0 || i > 7) return 'NO DATA';
-      return r([0x46, mid, 0x0B, 0x24, 0, this.ewma[i], 0, 0, 0xFF, 0xFF, mid, 0x0C, 0x24, (this.mis[i] >> 8) & 255, this.mis[i] & 255, 0, 0, 0xFF, 0xFF]);
+      const sup = { 0x00: [0x80, 0, 0, 0x01], 0x20: [0x80, 0, 0, 0x01], 0x40: [0, 0, 0, 0x01], 0x60: [0, 0, 0, 0x01], 0x80: [0, 0, 0, 0x01], 0xA0: [0x7F, 0x80, 0, 0] };
+      if (sup[P]) return [0x46, P, ...sup[P]];
+      if (P === 0x01 || P === 0x21) return [0x46, P, 0x01, 0x0A, 0x00, 0x8C, 0x00, 0x00, 0xFF, 0xFF];
+      const i = P - 0xA2; if (i < 0 || i > 7) return null;
+      return [0x46, P, 0x0B, 0x24, 0, this.ewma[i], 0, 0, 0xFF, 0xFF, P, 0x0C, 0x24, (this.mis[i] >> 8) & 255, this.mis[i] & 255, 0, 0, 0xFF, 0xFF];
     }
-    if (m === '03') return r([0x43, 0x00]);
-    if (m === '0A') return r([0x4A, 0x00]);
-    if (m === '07') return t > 90 ? r([0x47, 0x01, 0x03, 0x03]) : r([0x47, 0x00]);
-    if (m === '22') return r([0x7F, 0x22, 0x31]);
-    return 'NO DATA';
+    if (m === '09') {
+      const map = { 0x00: [0x55, 0x40, 0x00, 0x00], 0x02: [0x01, ...asc(DEMO_VIN)], 0x04: [0x01, ...asc('12688347'), 0, 0, 0, 0, 0, 0, 0, 0], 0x06: [0x01, 0x1A, 0x2B, 0x3C, 0x4D], 0x08: [0x14, ...Array(40).fill(0).map((_, k) => k % 7)], 0x0A: [0x01, ...asc('ECM-EngineControl'), 0, 0, 0] };
+      return map[P] ? [0x49, P, ...map[P]] : null;
+    }
+    if (m === '03') return [0x43, 0x00];
+    if (m === '0A') return [0x4A, 0x00];
+    if (m === '07') return t > 90 ? [0x47, 0x01, 0x03, 0x03] : [0x47, 0x00];
+    if (m === '22') {
+      if (P === 0x1470) return [0x7F, 0x22, 0x33];                                  // pretend this one is locked
+      const gm = { 0x1154: () => [Math.round(v.coolC + 37)], 0x115C: () => [Math.round(40 + v.rpm / 50)], 0x11A6: () => [Math.round(Math.random() * 4)], 0x119C: () => [178], 0x203F: () => [Math.round(v.rpm / 200)] };
+      for (let c = 0; c < 8; c++) gm[0x1205 + c] = () => [0, this.mis[c] & 255];
+      const g = gm[P]; return g ? [0x62, P >> 8, P & 255, ...g()] : [0x7F, 0x22, 0x31];
+    }
+    if (m === '1A') return P === 0xB0 ? [0x5A, 0xB0, 0x11] : P === 0x90 ? [0x5A, 0x90, ...asc(DEMO_VIN)] : [0x7F, 0x1A, 0x31];
+    return null;
   }
 }
 window.DemoTruck = DemoTruck;
@@ -442,7 +500,7 @@ window.DemoTruck = DemoTruck;
 class DemoElm {
   constructor() { this.truck = new DemoTruck(window.__demoSpeed || 1); this.name = 'Demo truck'; this.connected = true; }
   async pick() {} async attach() {}
-  async send(cmd) { await sleep(20); const o = this.truck.respond(cmd); return o.slice(0, o.indexOf('>')); }
+  async send(cmd) { await sleep(window.__demoLatency != null ? window.__demoLatency : 20); const o = this.truck.respond(cmd); return o.slice(0, o.indexOf('>')); }
   close() { this.connected = false; }
 }
 
@@ -631,6 +689,7 @@ function leakVerdict() {
 }
 function startLeakTest() {
   if (!S.running) { toast('Connect to the truck first'); return; }
+  if (S.scan) { toast('Wait for the scan to finish'); return; }
   const d = S.data;
   if (d.coolantF == null || d.coolantF < 170) { toast('Warm up first — coolant needs 170°F+'); return; }
   if ((d.mph || 0) > 1) { toast('Park first'); return; }
@@ -695,6 +754,368 @@ async function readPending() {
   const a = await qDtc(7) || [];
   await setHeader(TCM); const t = await qDtc(7) || []; await setHeader(ECM);
   S.codes.pending = [...new Set([...a, ...t])];
+}
+
+/* ============================== full scan ============================== */
+// Finds every value the truck will answer: standard OBD data and self-test results, then GM's own data
+// (service $22) on every computer that answers, then other modules on the main network. Last, it reads
+// everything it found at idle, at ~2,000 RPM and at idle again so each value can be identified later.
+const hx = b => b.map(x => x.toString(16).toUpperCase().padStart(2, '0')).join('');
+const h2 = n => n.toString(16).toUpperCase().padStart(2, '0');
+const w16 = b => (b[0] << 8) | b[1];
+const pctB = b => b[0] * 100 / 255;
+const trimB = b => (b[0] - 128) * 100 / 128;
+const catF = b => cToF(w16(b) / 10 - 40);
+const P01 = {
+  0x04: ['Engine load', '%', pctB], 0x05: ['Coolant temp', '°F', b => cToF(b[0] - 40)],
+  0x06: ['Short-term fuel trim, driver side', '%', trimB], 0x07: ['Long-term fuel trim, driver side', '%', trimB],
+  0x08: ['Short-term fuel trim, passenger side', '%', trimB], 0x09: ['Long-term fuel trim, passenger side', '%', trimB],
+  0x0A: ['Fuel pressure', 'psi', b => b[0] * 3 * 0.145038], 0x0B: ['Intake manifold pressure', 'kPa', b => b[0]],
+  0x0C: ['RPM', 'rpm', b => w16(b) / 4], 0x0D: ['Speed', 'mph', b => b[0] * 0.621371], 0x0E: ['Timing advance', '°', b => b[0] / 2 - 64],
+  0x0F: ['Intake air temp', '°F', b => cToF(b[0] - 40)], 0x10: ['Airflow (MAF)', 'g/s', b => w16(b) / 100], 0x11: ['Throttle position', '%', pctB],
+  0x14: ['O2 sensor front, driver side', 'V', b => b[0] / 200], 0x15: ['O2 sensor rear, driver side', 'V', b => b[0] / 200],
+  0x18: ['O2 sensor front, passenger side', 'V', b => b[0] / 200], 0x19: ['O2 sensor rear, passenger side', 'V', b => b[0] / 200],
+  0x1F: ['Run time since start', 's', w16], 0x21: ['Distance with check engine light on', 'mi', b => w16(b) * 0.621371],
+  0x22: ['Fuel rail pressure (vs vacuum)', 'kPa', b => w16(b) * 0.079], 0x23: ['Fuel rail pressure', 'psi', b => w16(b) * 10 * 0.145038],
+  0x2C: ['Commanded EGR', '%', pctB], 0x2E: ['Commanded EVAP purge', '%', pctB], 0x2F: ['Fuel level', '%', pctB],
+  0x30: ['Warm-ups since codes cleared', '', b => b[0]], 0x31: ['Distance since codes cleared', 'mi', b => w16(b) * 0.621371],
+  0x32: ['EVAP vapor pressure', 'Pa', b => ((w16(b) << 16) >> 16) / 4], 0x33: ['Barometric pressure', 'kPa', b => b[0]],
+  0x3C: ['Catalyst temp, driver side', '°F', catF], 0x3D: ['Catalyst temp, passenger side', '°F', catF],
+  0x3E: ['Catalyst temp, driver side (rear)', '°F', catF], 0x3F: ['Catalyst temp, passenger side (rear)', '°F', catF],
+  0x42: ['Computer voltage', 'V', b => w16(b) / 1000], 0x43: ['Absolute load', '%', b => w16(b) * 100 / 255],
+  0x44: ['Commanded air-fuel ratio (lambda)', '', b => w16(b) * 2 / 65536], 0x45: ['Relative throttle', '%', pctB],
+  0x46: ['Outside air temp', '°F', b => cToF(b[0] - 40)], 0x47: ['Throttle position B', '%', pctB],
+  0x49: ['Gas pedal position D', '%', pctB], 0x4A: ['Gas pedal position E', '%', pctB], 0x4C: ['Commanded throttle', '%', pctB],
+  0x4D: ['Minutes with check engine light on', 'min', w16], 0x4E: ['Minutes since codes cleared', 'min', w16],
+  0x52: ['Ethanol', '%', pctB], 0x5A: ['Relative gas pedal', '%', pctB], 0x5C: ['Oil temp', '°F', b => cToF(b[0] - 40)],
+  0x5E: ['Fuel rate', 'gal/h', b => w16(b) / 20 * 0.264172], 0x61: ['Driver demand torque', '%', b => b[0] - 125],
+  0x62: ['Actual engine torque', '%', b => b[0] - 125], 0x63: ['Reference torque', 'lb-ft', b => w16(b) * 0.737562],
+  0xA6: ['Odometer', 'mi', b => (((b[0] << 24) >>> 0) + (b[1] << 16) + (b[2] << 8) + b[3]) / 10 * 0.621371],
+};
+const SCAN = {
+  budgetMs: 7 * 60000,     // time allowed for the GM sweep; whatever doesn't fit is listed as skipped
+  // [computer, first two hex digits of the GM data numbers to try], most useful first
+  plan: [
+    ['7E0', 0x11], ['7E0', 0x12], ['7E0', 0x13], ['7E0', 0x14], ['7E0', 0x19], ['7E2', 0x19], ['7E2', 0x1A],
+    ['7E0', 0x15], ['7E0', 0x16], ['7E0', 0x1A], ['7E0', 0x20], ['7E2', 0x11], ['7E2', 0x12],
+    ['7E0', 0x10], ['7E0', 0x17], ['7E0', 0x18], ['7E0', 0x00], ['7E0', 0x28], ['7E0', 0x30], ['7E0', 0x31], ['7E0', 0x32],
+    ['7E2', 0x00], ['7E2', 0x10], ['7E2', 0x13], ['7E2', 0x14], ['7E2', 0x20], ['7E2', 0x28],
+  ],
+  otherBlocks: [0x11, 0x19, 0x1A, 0x00],
+  id1A: [0x90, 0x92, 0x98, 0x99, 0xB0, 0xB4, 0xC0, 0xC1, 0xC2, 0xCB, 0xCC],   // GM identity: VIN, part numbers, address
+};
+const MOD_NAMES = { '7E0': 'Engine computer', '7E2': 'Transmission computer' };
+S.scan = null; S.scanSum = store.get('th_scanSum', null); S.scanJson = null;
+
+function lastSeq(b, seq) { for (let i = b.length - seq.length; i >= 0; i--) { let ok = true; for (let j = 0; j < seq.length; j++) if (b[i + j] !== seq[j]) { ok = false; break; } if (ok) return i; } return -1; }
+function framesH1(lines) {                    // headers on: "7E8 06 41 00 ..." -> [{ id, b }]
+  const out = [];
+  for (const l0 of lines || []) { const l = l0.replace(/\s+/g, ''), m = l.match(/^([0-9A-F]{3})((?:[0-9A-F]{2})+)$/i); if (!m) continue; const b = []; for (let i = 0; i < m[2].length; i += 2) b.push(parseInt(m[2].substr(i, 2), 16)); out.push({ id: m[1].toUpperCase(), b }); }
+  return out;
+}
+function isotp(frames, id) {                  // put one message back together from raw CAN frames
+  let need = null, data = [];
+  for (const f of frames) {
+    if (f.id !== id || !f.b.length) continue; const t = f.b[0] >> 4;
+    if (t === 0) return f.b.slice(1, 1 + (f.b[0] & 15));
+    if (t === 1) { need = ((f.b[0] & 15) << 8) | f.b[1]; data = f.b.slice(2); }
+    else if (t === 2 && need != null) data.push(...f.b.slice(1));
+    if (need != null && data.length >= need) return data.slice(0, need);
+  }
+  return need != null ? data : null;
+}
+const asciiOf = hex => { let s = ''; for (let i = 0; i + 1 < hex.length; i += 2) { const c = parseInt(hex.substr(i, 2), 16); if (c >= 32 && c < 127) s += String.fromCharCode(c); } return s.trim(); };
+
+function scanGuard() { if (!S.running || !S.elm || !S.elm.connected) throw new Error('disconnected'); if (S.scan.cancel) throw new Error('cancel'); }
+async function scanSafe(c, timeout) {
+  scanGuard();
+  const sc = S.scan, l = await safe(c, timeout); sc.n++;
+  if (!l) { if (++sc.to >= 6) await scanRecover(); return null; }
+  sc.to = 0; return l;
+}
+async function scanRecover() {                // reader stopped answering: restart it and put things back
+  const sc = S.scan; sc.to = 0; if (++sc.rec > 3) throw new Error('reader');
+  const was = sc.msg; sc.msg = 'Reader went quiet. Restarting it…'; scanRender(true);
+  await safe('ATZ', 4000); await sleep(500);
+  for (const c of ['ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATAT1', 'ATSP6']) await safe(c, 2000);
+  S.header = null; sc.gen++;
+  if (sc.hdr) await setHeader(sc.hdr);
+  if (sc.reapply) await sc.reapply();
+  sc.msg = was;
+}
+async function scanHeader(h) { S.scan.hdr = h; scanGuard(); await setHeader(h); }
+async function ask(c, pos, timeout) {
+  const sc = S.scan, g = sc.gen;
+  let l = await scanSafe(c, timeout || 1500);
+  if (!l && sc.gen !== g) l = await scanSafe(c, timeout || 1500);          // retry once after a restart
+  if (!l) return { to: true };
+  if (isError(l)) return { none: true };
+  const b = toBytes(l), i = findSeq(b, pos);
+  if (i >= 0) return { data: b.slice(i + pos.length) };
+  const n = lastSeq(b, [0x7F, pos[0] - 0x40]);
+  return n >= 0 && n + 2 < b.length ? { nrc: b[n + 2] } : { none: true };
+}
+async function supChain(mode) {               // which PIDs/tests/infos a computer says it has
+  const out = [], sid = parseInt(mode, 16) + 0x40;
+  for (let base = 0; base <= 0xE0; base += 0x20) {
+    const r = await ask(mode + h2(base), [sid, base], 2000);
+    if (!r.data || r.data.length < 4) break;
+    let next = false;
+    for (let i = 0; i < 32; i++) if (r.data[i >> 3] & (0x80 >> (i & 7))) { const p = base + i + 1; if (i === 31) next = true; else out.push(p); }
+    if (!next) break;
+  }
+  return out;
+}
+async function scanParked() {
+  await scanHeader(ECM);
+  const s = await ask('010D', [0x41, 0x0D]); if (s.data && s.data[0] * 0.621371 > 2) throw new Error('moved');
+  const r = await ask('010C', [0x41, 0x0C]); if (r.data) S.data.rpm = w16(r.data) / 4;
+  return r.data ? S.data.rpm : null;
+}
+
+async function scanDiscover(R) {
+  const sc = S.scan; sc.phase = 'find'; sc.msg = 'Finding the truck\'s computers…'; scanRender(true);
+  const ids = new Set();
+  await scanSafe('ATH1', 1500); sc.reapply = async () => { await safe('ATH1', 1500); };
+  S.header = null; await scanHeader('7DF');
+  for (let k = 0; k < 2; k++) { const l = await scanSafe('0100', 3000); if (l && !isError(l)) for (const f of framesH1(l)) if (/^7E[89A-F]$/.test(f.id)) ids.add(f.id); }
+  sc.reapply = null; await scanSafe('ATH0', 1500); S.header = null;
+  const reqs = [ECM, TCM, ...[...ids].map(id => (parseInt(id, 16) - 8).toString(16).toUpperCase())];
+  for (const q of ['7E1', '7E3', '7E4', '7E5', '7E6', '7E7']) {           // quiet ones that only speak GM
+    if (reqs.includes(q)) continue;
+    await scanHeader(q); const r = await ask('1AB0', [0x5A, 0xB0], 800);
+    if (r.data || r.nrc != null) reqs.push(q);
+  }
+  for (const q of [...new Set(reqs)]) {
+    const resp = (parseInt(q, 16) + 8).toString(16).toUpperCase();
+    R.modules[q] = { resp, name: MOD_NAMES[q] || 'Computer ' + q, obd: ids.has(resp), m01: {}, m09: {}, m06: {}, m22: {}, nrc: {}, id1A: {}, blocks: [] };
+  }
+}
+async function scanStandard(R) {
+  const sc = S.scan, list = Object.entries(R.modules); sc.phase = 'std';
+  for (let k = 0; k < list.length; k++) {
+    const [q, M] = list[k]; sc.pf = k / list.length; sc.msg = `${M.name}: standard data…`; scanRender(true);
+    await scanHeader(q);
+    for (const p of await supChain('01')) {
+      const r = await ask('01' + h2(p), [0x41, p]); if (!r.data) continue;
+      M.m01[h2(p)] = hx(r.data);
+      const d = P01[p]; if (d) { try { const v = d[2](r.data); if (isFinite(v)) (R.decoded[q] = R.decoded[q] || {})['01' + h2(p)] = [d[0], Math.round(v * 10) / 10, d[1]]; } catch (e) {} }
+    }
+    sc.msg = `${M.name}: self-test results…`; scanRender();
+    for (const p of await supChain('09')) { const r = await ask('09' + h2(p), [0x49, p], 3000); if (r.data) M.m09[h2(p)] = hx(r.data); }
+    for (const p of await supChain('06')) { const r = await ask('06' + h2(p), [0x46, p], 3000); if (r.data) M.m06[h2(p)] = hx(r.data); }
+    for (const d of SCAN.id1A) { const r = await ask('1A' + h2(d), [0x5A, d], 2000); if (r.data) M.id1A[h2(d)] = hx(r.data); }
+  }
+  const E = R.modules[ECM]; if (E && E.m09['02']) R.vin = asciiOf(E.m09['02']).slice(-17);
+}
+async function scanSweep(R) {
+  const sc = S.scan, plan = SCAN.plan.filter(([q]) => R.modules[q]);
+  for (const q of Object.keys(R.modules)) if (q !== ECM && q !== TCM) for (const b of SCAN.otherBlocks) plan.push([q, b]);
+  if (window.__scanQuick) plan.splice(window.__scanQuick);
+  const budget = window.__scanBudget || SCAN.budgetMs;
+  sc.phase = 'gm'; sc.sweepTotal = plan.length * 256; sc.sweepDone = 0; sc.sweepT0 = Date.now(); sc.budget = budget;
+  const dead = new Set();
+  for (let k = 0; k < plan.length; k++) {
+    const [q, hi] = plan[k], M = R.modules[q];
+    if (dead.has(q)) { sc.sweepTotal -= 256; continue; }
+    if (Date.now() - sc.sweepT0 > budget) { R.skipped = plan.slice(k).filter(([x]) => !dead.has(x)).map(([x, h]) => x + ':' + h2(h) + 'xx'); break; }
+    await scanParked();
+    await scanHeader(q);
+    let pos = 0, neg = 0;
+    for (let lo = 0; lo < 256; lo++) {
+      const id = h2(hi) + h2(lo), r = await ask('22' + id, [0x62, hi, lo], 1200);
+      sc.sweepDone++;
+      if (r.data) { M.m22[id] = hx(r.data); pos++; }
+      else if (r.nrc != null) { neg++; if (r.nrc === 0x11) { dead.add(q); break; } if (r.nrc !== 0x31) M.nrc[id] = h2(r.nrc); }
+      if ((lo & 15) === 15) { sc.msg = `${M.name}: GM data ${h2(hi)}00–${h2(hi)}FF · ${Object.keys(M.m22).length} found so far`; scanRender(); }
+      if (lo === 31 && !pos && !neg && q !== ECM && q !== TCM && !M.blocks.length) { dead.add(q); break; }   // not answering GM requests at all
+    }
+    if (!dead.has(q)) M.blocks.push(h2(hi));
+  }
+  sc.sweepDone = sc.sweepTotal;
+}
+async function scanBody(R) {
+  const sc = S.scan; sc.phase = 'body'; sc.msg = 'Looking for other modules (ABS, body, 4WD)…'; scanRender(true);
+  let cur = null;
+  const listen = async resp => { const l = await scanSafe('ATCRA' + resp, 1500); return !!l && !l.some(x => /\?/.test(x)); };
+  sc.reapply = async () => { await safe('ATH1', 1500); if (cur) await safe('ATCRA' + cur, 1500); };
+  try {
+    await scanSafe('ATH1', 1500);
+    for (let n = 0x241; n <= 0x25F; n++) {
+      const req = n.toString(16).toUpperCase(), resp = (n + 0x400).toString(16).toUpperCase();
+      await scanHeader(req); cur = resp;
+      if (!await listen(resp)) { R.bodyNote = 'reader can\'t listen for other modules'; break; }
+      const l = await scanSafe('1AB0', 600), m = l && !isError(l) ? isotp(framesH1(l), resp) : null;
+      if (m && m.length) R.body[req] = { resp, first: hx(m), id1A: {} };
+      sc.pf = (n - 0x241) / 62; sc.msg = `Looking for other modules · ${Object.keys(R.body).length} found`; scanRender();
+    }
+    const found = Object.entries(R.body);
+    for (let k = 0; k < found.length; k++) {
+      const [req, B] = found[k]; sc.pf = .5 + k / found.length / 2;
+      await scanHeader(req); cur = B.resp; await listen(B.resp);
+      await scanSafe('ATFCSH' + req, 1500); await scanSafe('ATFCSD300000', 1500); await scanSafe('ATFCSM1', 1500);
+      for (const d of SCAN.id1A) {
+        const l = await scanSafe('1A' + h2(d), 1200), m = l && !isError(l) ? isotp(framesH1(l), B.resp) : null;
+        if (m && m[0] === 0x5A && m[1] === d) B.id1A[h2(d)] = hx(m.slice(2));
+      }
+    }
+  } finally {
+    sc.reapply = null; cur = null;
+    if (S.running && S.elm && S.elm.connected) { await safe('ATFCSM0', 1500); await safe('ATAR', 1500); await safe('ATH0', 1500); }
+    S.header = null;
+  }
+}
+async function scanWatch(R) {
+  const sc = S.scan, t0 = sc.t0, W = R.watch, quick = !!window.__scanQuick;
+  const items = [];
+  for (const [q, M] of Object.entries(R.modules)) {
+    for (const p of Object.keys(M.m01)) items.push([q, '01', p]);
+    for (const d of Object.keys(M.m22)) items.push([q, '22', d]);
+  }
+  sc.phase = 'watch'; sc.pf = 0; sc.items = items.length;
+  if (!items.length) { W.note = 'nothing to watch'; return; }
+  let label = 'idle', nag = 0;
+  const rpmNow = async () => {
+    await scanHeader(ECM);
+    const s = await ask('010D', [0x41, 0x0D]); if (s.data && s.data[0] * 0.621371 > 2) throw new Error('moved');
+    const r = await ask('010C', [0x41, 0x0C]); if (!r.data) return null;
+    const v = S.data.rpm = w16(r.data) / 4; W.rows.push([Date.now() - t0, ECM, '01', '0C', hx(r.data)]);
+    if (label === 'rev' && v < 1300 && Date.now() - nag > 9000) { nag = Date.now(); speak('Keep it at about two thousand.'); }
+    return v;
+  };
+  const waitFor = async (ok, ms) => { const end = Date.now() + ms; while (Date.now() < end) { const v = await rpmNow(); if (v != null && ok(v)) return true; await sleep(250); } return false; };
+  const pass = async (lbl, k) => {
+    label = lbl; W.phases.push([Date.now() - t0, lbl]);
+    for (let i = 0; i < items.length; i++) {
+      if (i % 25 === 0) await rpmNow();
+      const [q, mode, id] = items[i], n = parseInt(id, 16);
+      await scanHeader(q);
+      const r = mode === '01' ? await ask('01' + id, [0x41, n]) : await ask('22' + id, [0x62, n >> 8, n & 255], 1200);
+      if (r.data) W.rows.push([Date.now() - t0, q, mode, id, hx(r.data)]);
+      if (i % 16 === 0) { sc.pf = (k + i / items.length) / 3; scanRender(); }
+    }
+    await rpmNow();
+  };
+  const tell = (prompt, msg, say) => { sc.prompt = prompt; sc.msg = msg; scanRender(true); if (say) { beep('warn'); speak(say); } };
+  let rpm = await rpmNow();
+  if (rpm == null || rpm < 400) {
+    tell('Start the engine', 'The last step watches it run.', 'Start the engine for the last step.');
+    if (!await waitFor(v => v > 400, quick ? 500 : 60000)) { W.note = 'engine was off'; sc.prompt = null; return; }
+  }
+  tell(null, 'Last step: reading everything at idle. Hands off.', null); speak('Last step. Keep it idling, hands off.');
+  await pass('idle', 0);
+  tell('Rev to about 2,000 and hold it', 'Hold it steady. It\'ll tell you when to let off.', 'Rev to about two thousand R P M and hold it.');
+  await waitFor(v => v >= 1500, quick ? 300 : 20000);
+  sc.prompt = 'Hold about 2,000…'; scanRender(true);
+  await pass('rev', 1);
+  tell('Let off — back to idle', 'Almost done.', 'Let off. Back to idle.');
+  await waitFor(v => v < 1000, quick ? 300 : 10000);
+  sc.prompt = null; sc.msg = 'Almost done. Keep idling.'; scanRender(true);
+  await pass('idle2', 2);
+}
+
+function scanFrac() {
+  const sc = S.scan; if (!sc) return 0;
+  const at = { find: [0, .03], std: [.03, .12], gm: [.12, .75], body: [.75, .8], watch: [.8, 1] }[sc.phase] || [0, 0];
+  let f = sc.pf || 0;
+  if (sc.phase === 'gm') f = Math.max(sc.sweepDone / Math.max(1, sc.sweepTotal), (Date.now() - sc.sweepT0) / sc.budget);
+  return at[0] + (at[1] - at[0]) * Math.min(1, f);
+}
+function scanEta() {
+  const sc = S.scan, rate = sc.n / Math.max(1, (Date.now() - sc.t0) / 1000); if (rate <= 0 || sc.n < 30) return '';
+  let s = 0; const found = Object.values(sc.R.modules).reduce((a, M) => a + Object.keys(M.m01).length + Object.keys(M.m22).length, 0);
+  if (sc.phase === 'find' || sc.phase === 'std') s = SCAN.budgetMs / 1000 + 60;
+  else if (sc.phase === 'gm') s = Math.min((sc.sweepTotal - sc.sweepDone) / rate, (sc.budget - (Date.now() - sc.sweepT0)) / 1000) + 15;
+  if (sc.phase !== 'watch') s += found * 3 / rate + 30;
+  else s = (1 - (sc.pf || 0)) * (sc.items * 3 / rate + 20);
+  const m = Math.max(1, Math.round(s / 60));
+  return ` · about ${m} min left`;
+}
+let scanRT = 0;
+function scanRender(force) { const now = Date.now(); if (!force && now - scanRT < 300) return; scanRT = now; render(); }
+function renderScan() {
+  const sc = S.scan, v = $('#scanVerdict'), n = $('#scanNote'), btn = $('#scanBtn');
+  if (sc) {
+    const p = Math.round(scanFrac() * 100);
+    v.className = 'verdict ' + (sc.prompt ? 'warn' : 'na'); v.textContent = sc.prompt || `Scanning… ${p}%`;
+    n.textContent = sc.msg + (sc.prompt ? '' : scanEta());
+    $('#scanBar').hidden = false; $('#scanFill').style.width = p + '%';
+    btn.textContent = 'Stop scan'; btn.className = 'small danger';
+    status(`Scanning · ${(sc.n / Math.max(1, (Date.now() - sc.t0) / 1000)).toFixed(1)} reads/sec`);
+  } else {
+    $('#scanBar').hidden = true; btn.className = 'small primary';
+    const s = S.scanSum;
+    btn.textContent = s ? 'Scan again' : 'Start scan';
+    if (s) { v.className = 'verdict ' + (s.partial ? 'warn' : 'ok'); v.textContent = s.partial ? `Stopped early · ${s.total} values saved` : `Done ✓ ${s.total} values found`;
+      n.textContent = `${new Date(s.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })} · ${s.line}${s.partial && s.reason ? ' · stopped: ' + s.reason : ''}${s.demo ? ' · demo' : ''}`; }
+  }
+  $('#scanExp').hidden = !S.scanJson;
+}
+
+function startScan() {
+  if (S.scan) { S.scan.cancel = true; S.scan.msg = 'Stopping…'; scanRender(true); return; }
+  if (!S.running) { toast('Connect to the truck first'); return; }
+  if (S.leakTest) { toast('Finish the leak test first'); return; }
+  if ((S.data.mph || 0) > 1) { toast('Park first'); return; }
+  if (S.data.rpm == null || S.data.rpm < 400) { toast('Start the engine first'); return; }
+  unlockAudio();
+  const R = { v: 1, at: new Date().toISOString(), truck: '2019 Silverado 1500 · 5.3L V8 · 8-speed', vin: null, reader: S.elm.name, elm: S.elmVer || '', demo: S.demo,
+    modules: {}, decoded: {}, body: {}, bodyNote: null, skipped: [], watch: { cols: ['ms', 'computer', 'mode', 'id', 'hex'], phases: [], rows: [] } };
+  S.scan = { t0: Date.now(), R, n: 0, to: 0, rec: 0, gen: 0, hdr: null, reapply: null, phase: 'find', pf: 0, msg: 'Getting ready…', prompt: null, cancel: false };
+  try { window.scrollTo({ top: 0, behavior: 'smooth' }); } catch (e) {}
+  render(); runScan();
+}
+async function runScan() {
+  const sc = S.scan, R = sc.R; let reason = null;
+  try {
+    for (let i = 0; i < 50 && !S.loopPaused && S.running; i++) await sleep(100);   // let the live loop finish its turn
+    speak('Scan starting. Stay parked and let it idle.');
+    await scanDiscover(R); await scanStandard(R); await scanSweep(R); await scanBody(R); await scanWatch(R);
+  } catch (e) {
+    reason = { cancel: 'you stopped it', moved: 'the truck moved', disconnected: 'the reader disconnected', reader: 'the reader stopped answering' }[e.message] || e.message;
+  }
+  try { if (S.running && S.elm && S.elm.connected) { await safe('ATFCSM0', 1500); await safe('ATAR', 1500); await safe('ATH0', 1500); S.header = null; await setHeader(ECM); } } catch (e) {}
+  finishScan(R, reason);
+  S.lastOk = Date.now(); S.scan = null; render();
+}
+function scanSummary(R, mins) {
+  const L = [`# Silverado full scan — ${new Date(R.at).toLocaleString()} · ${mins} min${R.demo ? ' · DEMO DATA' : ''}`];
+  L.push(`- Status: ${R.partial ? 'stopped early — ' + R.stopped : 'complete'}`);
+  if (R.vin) L.push(`- VIN: ${R.vin}`);
+  L.push(`- Reader: ${R.reader} ${R.elm ? '(' + R.elm + ')' : ''} · ${R.requests} requests at ${R.perSec}/sec`);
+  for (const [q, M] of Object.entries(R.modules)) {
+    const n22 = Object.keys(M.m22).length, nN = Object.keys(M.nrc).length, nm = asciiOf(M.m09['0A'] || '');
+    L.push(`- ${M.name} (${q})${nm ? ' "' + nm + '"' : ''}: ${Object.keys(M.m01).length} standard · ${Object.keys(M.m06).length} self-test groups · ${n22} GM-only${nN ? ` (+${nN} that exist but are locked or not available now)` : ''} · GM ranges checked: ${M.blocks.join(', ') || 'none'}`);
+  }
+  const nb = Object.keys(R.body).length;
+  L.push(`- Other modules on the main network: ${R.bodyNote ? R.bodyNote : nb ? Object.keys(R.body).join(', ') : 'none answered'}`);
+  if (R.skipped.length) L.push(`- Skipped for time: ${R.skipped.join(', ')}`);
+  const revs = R.watch.rows.filter(r => r[3] === '0C' && r[2] === '01').map(r => w16(r[4].match(/../g).map(x => parseInt(x, 16))) / 4);
+  L.push(`- Watch: ${R.watch.rows.length} readings · ${R.watch.phases.map(p => p[1]).join(' → ') || 'not run'}${revs.length ? ` · RPM ${Math.round(Math.min(...revs))}–${Math.round(Math.max(...revs))}` : ''}${R.watch.note ? ' · ' + R.watch.note : ''}`);
+  L.push('', '## Standard values at the start of the scan');
+  for (const [q, d] of Object.entries(R.decoded)) for (const [k, [name, v, u]] of Object.entries(d)) L.push(`- ${(R.modules[q] || {}).name || q} · ${name}: ${v}${u ? ' ' + u : ''}`);
+  return L.join('\n');
+}
+function finishScan(R, reason) {
+  const sc = S.scan, secs = Math.round((Date.now() - sc.t0) / 1000), mods = Object.values(R.modules);
+  R.partial = !!reason; R.stopped = reason; R.durationS = secs; R.requests = sc.n; R.perSec = Math.round(sc.n / Math.max(1, secs) * 10) / 10;
+  const n01 = mods.reduce((a, M) => a + Object.keys(M.m01).length, 0), n22 = mods.reduce((a, M) => a + Object.keys(M.m22).length, 0), nb = Object.keys(R.body).length;
+  const total = n01 + n22, stamp = stampOf(sc.t0), text = JSON.stringify(R), md = scanSummary(R, Math.round(secs / 60));
+  S.scanJson = { name: `silverado-scan-${stamp}.json`, text };
+  S.scanSum = { at: sc.t0, total, partial: R.partial, reason, demo: S.demo, line: `${n01} standard · ${n22} GM-only${nb ? ' · ' + nb + ' other modules' : ''}` };
+  store.set('th_scanSum', S.scanSum);
+  if (!S.demo && total > 0) { S.queue.push({ path: `scans/${stamp}.md`, text: md + '\n' }, { path: `scans/${stamp}.json`, text: text + '\n' }); saveQueue(); flushQueue(); }
+  window.__lastScan = { R, md };
+  beep('warn');
+  speak(R.partial ? 'Scan stopped. What it found is saved.' : 'Scan done. You can shut the truck off.');
+  toast(R.partial ? 'Scan stopped — saved what it found' : 'Scan done — ' + total + ' values');
+}
+async function exportScan() {
+  const j = S.scanJson; if (!j) { toast('No scan yet'); return; }
+  try { const f = new File([j.text], j.name, { type: 'application/json' }); if (navigator.canShare && navigator.canShare({ files: [f] })) { await navigator.share({ files: [f], title: j.name }); return; } }
+  catch (e) { if (e.name === 'AbortError') return; }
+  try { const url = URL.createObjectURL(new Blob([j.text], { type: 'application/json' })); const a = document.createElement('a'); a.href = url; a.download = j.name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(url), 5000); toast('Saved ' + j.name); }
+  catch (e) { sheet('Scan (JSON)', j.text); }
 }
 
 /* ============================== alerts ============================== */
@@ -908,13 +1329,13 @@ async function ghPut(path, text) {
   let sha;
   const g = await fetch(url, { headers: ghHeaders(), cache: 'no-store' });
   if (g.ok) sha = (await g.json()).sha; else if (g.status !== 404) throw new Error('GitHub said ' + g.status);
-  const body = { message: 'Truck drive ' + path, content: b64(text) }; if (sha) body.sha = sha;
+  const body = { message: 'Truck ' + path, content: b64(text) }; if (sha) body.sha = sha;
   const r = await fetch(url, { method: 'PUT', headers: Object.assign({ 'Content-Type': 'application/json' }, ghHeaders()), body: JSON.stringify(body) });
   if (r.status === 401) throw new Error('GitHub key was rejected');
   if (r.status === 403 || r.status === 404) throw new Error('Key can\'t save there — Contents must be "Read and write"');
   if (!r.ok) throw new Error('GitHub said ' + r.status);
 }
-function saveQueue() { if (!store.set('th_queue', S.queue)) { const small = S.queue.filter(q => !q.path.endsWith('.csv')); store.set('th_queue', small); } }
+function saveQueue() { if (!store.set('th_queue', S.queue)) { const small = S.queue.filter(q => !/\.(csv|json)$/.test(q.path)); store.set('th_queue', small); } }
 let flushing = false;
 async function flushQueue() {
   if (flushing || !S.queue.length || !S.cfg.token) { renderCloud(); return; }
@@ -924,7 +1345,7 @@ async function flushQueue() {
       const q = S.queue[0];
       await ghPut(q.path, q.text);
       S.queue.shift(); saveQueue();
-      S.cloudMsg = { cls: 'ok', text: `Saved ${q.path.replace('drives/', '').replace(/\.(md|csv)$/, '')} at ${hhmm(Date.now())}` };
+      S.cloudMsg = { cls: 'ok', text: `Saved ${q.path.replace(/^drives\//, '').replace(/^scans\//, 'scan ').replace(/\.(md|csv|json)$/, '')} at ${hhmm(Date.now())}` };
       store.set('th_lastSave', S.cloudMsg);
     }
   } catch (e) {
@@ -1040,7 +1461,8 @@ function render() {
   // banner
   const list = Object.values(S.alerts).sort((a, b) => LV[b.level] - LV[a.level] || b.at - a.at);
   const bn = $('#banner'), top1 = list[0];
-  if (!S.running) { bn.className = 'banner'; $('#bTitle').textContent = 'Not connected'; $('#bMsg').textContent = 'Plug in the reader, start the truck, then tap Connect.'; $('#bMore').textContent = ''; $('#bRow').hidden = true; }
+  if (S.scan) { const p = Math.round(scanFrac() * 100); bn.className = 'banner' + (S.scan.prompt ? ' warn' : ''); $('#bTitle').textContent = S.scan.prompt || 'Scanning the truck… ' + p + '%'; $('#bMsg').textContent = S.scan.msg; $('#bMore').textContent = S.scan.prompt ? '' : 'Stay parked. Leave it idling.'; $('#bRow').hidden = true; }
+  else if (!S.running) { bn.className = 'banner'; $('#bTitle').textContent = 'Not connected'; $('#bMsg').textContent = 'Plug in the reader, start the truck, then tap Connect.'; $('#bMore').textContent = ''; $('#bRow').hidden = true; }
   else if (!top1) { bn.className = 'banner ok'; $('#bTitle').textContent = 'All good'; $('#bMsg').textContent = 'Watching temps, charging, fuel trims, misfires and codes.'; $('#bMore').textContent = ''; $('#bRow').hidden = true; }
   else {
     bn.className = 'banner ' + top1.level; $('#bTitle').textContent = top1.title; $('#bMsg').textContent = top1.msg;
@@ -1057,13 +1479,15 @@ function render() {
   const pill = $('#pill');
   pill.className = 'pill' + (S.running ? (S.demo ? ' demo' : ' on') : '');
   pill.textContent = S.running ? (S.demo ? 'Demo' : 'Live') : 'Not connected';
-  renderCloud(); renderSmog(); renderLeak();
+  renderCloud(); renderSmog(); renderLeak(); renderScan();
 }
 
 /* ============================== main loop ============================== */
 async function loop() {
   let cycle = 0, okCycles = 0, t0 = Date.now();
   while (S.running) {
+    if (S.scan) { S.loopPaused = true; if (!S.elm || !S.elm.connected) break; await sleep(250); continue; }   // the scan has the reader
+    S.loopPaused = false;
     const start = Date.now();
     try {
       const before = S.lastRx || 0;
@@ -1127,6 +1551,7 @@ async function onDrop() {
   if (S.running) { stop(); status('Lost the reader. Tap Connect to try again.'); }
 }
 function stop() {
+  if (S.scan) S.scan.cancel = true;
   S.running = false; if (S.drive) finishDrive('disconnected'); saveLog();
   if (S.elm) S.elm.close();
   try { S.wl && S.wl.release(); } catch (e) {}
@@ -1161,6 +1586,8 @@ $('#clearBtn').onclick = () => { S.log = []; S.logMeta = null; S.history = []; s
 $('#sheetClose').onclick = () => $('#sheet').classList.remove('show');
 
 $('#cfgSave').onclick = testCloud;
+$('#scanBtn').onclick = startScan;
+$('#scanExp').onclick = exportScan;
 $('#smogBtn').onclick = () => { if (!S.running) { toast('Connect to the truck first'); return; } S.smogNow = true; S.smog = null; renderSmog(); };
 $('#leakBtn').onclick = () => { if (S.leakTest) { S.leakTest = null; renderLeak(); return; } startLeakTest(); };
 $('#cfgFlush').onclick = () => { S.cloudMsg = null; if (!S.queue.length) { toast('Nothing waiting'); renderCloud(); return; } flushQueue(); };
@@ -1170,7 +1597,7 @@ buildUI(); render(); setButtons(); checkStaleDrive(); flushQueue();
 if (!navigator.bluetooth) status('Open this page in the free Bluefy app to connect. Demo works anywhere.');
 
 // test hooks
-window.__TH = { S, toBytes, cleanLines, parseDtcs, parseMode06, decodeDtc, summary, warmMisfires, csv, LIMITS, finishDrive, trackDrive, flushQueue, parseReadiness, smogVerdict, leakFindings, leakVerdict };
+window.__TH = { S, toBytes, cleanLines, parseDtcs, parseMode06, decodeDtc, summary, warmMisfires, csv, LIMITS, finishDrive, trackDrive, flushQueue, parseReadiness, smogVerdict, leakFindings, leakVerdict, framesH1, isotp, P01, SCAN, scanSummary };
 })();
 </script>
 </body>
