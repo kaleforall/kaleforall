@@ -206,15 +206,16 @@
   @media (max-width:600px){ .d-clock{display:none} .d-btn{padding:8px 10px} }
 
   /* ---------- backgrounds (truck photos / Oregon scenes) ----------
-     A fixed picture behind everything, a dark fade over it, and see-through cards so the numbers stay easy to read. */
+     A fixed picture behind everything, a dark fade over it, and mostly-solid cards so the numbers stay easy to read.
+     No backdrop blur and only small local pictures: both crashed an older iPad. */
   #bg{position:fixed;top:0;left:0;right:0;bottom:0;z-index:0;background-color:var(--bg);background-repeat:no-repeat;background-size:cover;background-position:50% 50%;pointer-events:none}
   #bg::after{content:"";position:absolute;top:0;left:0;right:0;bottom:0;
     background:linear-gradient(180deg,rgba(7,9,12,.62) 0%,rgba(7,9,12,.38) 30%,rgba(7,9,12,.5) 65%,rgba(7,9,12,.8) 100%)}
   .wrap{position:relative;z-index:1}
   body.has-bg .card,body.has-bg .tile:not(.warn):not(.alarm),body.has-bg .banner:not(.ok):not(.warn):not(.alarm),
   body.has-bg .d-hero,body.has-bg .d-tile:not(.warn):not(.alarm),body.has-bg .d-chip,body.has-bg .d-mis,body.has-bg .d-top:not(.warn):not(.alarm){
-    background:rgba(13,17,22,.66);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);border-color:rgba(255,255,255,.09)}
-  body.has-bg .banner.ok{background:linear-gradient(180deg,rgba(16,38,26,.84),rgba(15,26,20,.84));-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+    background:rgba(13,17,22,.8);border-color:rgba(255,255,255,.09)}
+  body.has-bg .banner.ok{background:linear-gradient(180deg,rgba(16,38,26,.88),rgba(15,26,20,.88))}
   body.has-bg h1,body.has-bg .sub,body.has-bg .status,body.has-bg footer{text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 8px rgba(0,0,0,.6)}
   body.has-bg .sub,body.has-bg .status{color:#c8d1db}
   body.has-bg #dash{background:transparent}
@@ -225,7 +226,7 @@
   .bg-pick{display:flex;align-items:center}
   .bg-pick b{min-width:128px;text-align:center;font-size:14.5px}
   .bg-pick button{min-height:38px;width:42px;padding:0;font-size:22px;line-height:1;border-radius:12px}
-  .bg-grid{display:grid;grid-template-columns:repeat(4,1fr);grid-gap:8px;gap:8px;margin-top:8px}
+  .bg-grid{display:grid;grid-template-columns:repeat(3,1fr);grid-gap:8px;gap:8px;margin-top:8px}
   .bg-grid button{padding:0;min-height:0;background:none;border-radius:12px;text-align:center;color:var(--muted)}
   .bg-grid .bg-th{display:block;height:76px;border-radius:12px;border:2px solid var(--line);background:linear-gradient(160deg,#151c26,#07090c) center/cover no-repeat}
   .bg-grid .bg-lb{display:block;font-size:11px;font-weight:600;margin-top:4px;line-height:1.2}
@@ -340,7 +341,6 @@
     <div class="toggle" style="margin-top:12px"><span>Background</span>
       <span class="bg-pick"><button id="bgPrev" aria-label="Previous background">&lsaquo;</button><b id="bgName">Plain dark</b><button id="bgNext" aria-label="Next background">&rsaquo;</button></span></div>
     <div class="bg-grid" id="bgGrid"></div>
-    <div class="hint" id="bgCredit" style="margin:8px 0 0"></div>
   </section>
 
   <footer>
@@ -1881,49 +1881,28 @@ $('#dDemo').onclick = () => { if (!S.running) start(true); };
 $('#dMute').onclick = () => $('#ackBtn').onclick();
 
 /* ============================== backgrounds ============================== */
-// Real Oregon photos are public domain (US government) and load straight from the agency sites (big files, cached after the first time).
-const PD = 'https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/';
+// Small local pictures only (big or remote ones crashed an older iPad).
 const BGS = [
   { id: 'none', name: 'Plain dark' },
-  { id: 'truck-front', name: 'My truck', src: 'bg/truck-front.jpg', thumb: 'bg/truck-front-thumb.jpg', pos: '50% 42%' },
-  { id: 'truck-side', name: 'My truck, side', src: 'bg/truck-side.jpg', thumb: 'bg/truck-side-thumb.jpg', pos: '42% 38%' },
-  { id: 'forest', name: 'Old-growth firs', src: 'https://www.fws.gov/sites/default/files/images/2010-10/12573.jpg',
-    credit: 'Old-growth Douglas fir, Forest Park, Portland. Photo: David Patte / USFWS (public domain).' },
-  { id: 'river', name: 'Opal Creek', src: 'https://www.fws.gov/sites/default/files/images/2005-06/12575.jpg',
-    credit: 'Opal Creek Wilderness, Willamette National Forest. Photo: David Patte / USFWS (public domain).' },
-  { id: 'firs-up', name: 'McKenzie Pass firs', src: PD + 'thumbnails/image/7857.jpg',
-    credit: 'Douglas firs at McKenzie Pass, Willamette National Forest. Photo: David Goodrich / NOAA, via USGS (public domain).' },
-  { id: 'mountain', name: 'Crater Lake', src: PD + 'media/images/IMG-8749.jpg',
-    credit: 'Crater Lake sunrise. Photo: Miel Corbett, via USGS (public domain).' },
+  { id: 'truck-front', name: 'My truck', pos: '50% 42%' },
+  { id: 'truck-side', name: 'My truck, side', pos: '42% 38%' },
+  { id: 'oldgrowth', name: 'Mossy old growth', pos: '28% 50%' },
+  { id: 'elk', name: 'Bull elk', pos: '60% 40%' },
+  { id: 'moose', name: 'Moose', pos: '57% 45%' },
 ];
-const BG_OLD = { coast: 'forest', night: 'firs-up' };          // drawn scenes that were replaced by photos
+const BG_OLD = { forest: 'oldgrowth', river: 'oldgrowth', coast: 'oldgrowth', mountain: 'oldgrowth', night: 'oldgrowth' };   // retired scenes
 function setBg(id, quiet) {
-  const b = BGS.find(x => x.id === (BG_OLD[id] || id)) || BGS[0], el = $('#bg');
+  const b = BGS.find(x => x.id === (BG_OLD[id] || id)) || BGS[0], on = b.id !== 'none';
   S.bg = b.id; store.set('th_bg', b.id);
-  el.style.backgroundImage = b.src ? `url("${b.src}")` : 'none';
-  el.style.backgroundPosition = b.pos || '50% 50%';
-  document.body.classList.toggle('has-bg', !!b.src);
+  $('#bg').style.backgroundImage = on ? `url("bg/${b.id}.jpg")` : 'none';
+  $('#bg').style.backgroundPosition = b.pos || '50% 50%';
+  document.body.classList.toggle('has-bg', on);
   $('#bgName').textContent = b.name;
-  $('#bgCredit').textContent = b.credit || '';
   Array.prototype.forEach.call(document.querySelectorAll('#bgGrid button'), x => x.classList.toggle('on', x.dataset.id === b.id));
   if (!quiet) toast(b.name);
-  if (b.src && /^https?:/.test(b.src)) {                     // remote photo: say so if it can't load (no signal, or the site moved it)
-    const im = new Image();
-    im.onerror = () => { if (S.bg === b.id) toast(`Couldn't load ${b.name} — no signal?`); };
-    im.src = b.src;
-  }
 }
 function stepBg(d) { const i = BGS.findIndex(x => x.id === S.bg); setBg(BGS[(i + d + BGS.length) % BGS.length].id); }
-$('#bgGrid').innerHTML = BGS.map(b => `<button data-id="${b.id}" aria-label="${b.name}"><span class="bg-th"></span><span class="bg-lb">${b.name}</span></button>`).join('');
-function loadThumbs() {                                        // only fetch the big photos for thumbnails once the picker is on screen
-  Array.prototype.forEach.call(document.querySelectorAll('#bgGrid button'), x => {
-    const b = BGS.find(y => y.id === x.dataset.id); if (b && b.src) x.firstChild.style.backgroundImage = `url("${b.thumb || b.src}")`;
-  });
-}
-if ('IntersectionObserver' in window) {
-  const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { loadThumbs(); io.disconnect(); } });
-  io.observe($('#bgGrid'));
-} else loadThumbs();
+$('#bgGrid').innerHTML = BGS.map(b => `<button data-id="${b.id}" aria-label="${b.name}"><span class="bg-th"${b.id !== 'none' ? ` style="background-image:url('bg/${b.id}-thumb.jpg')"` : ''}></span><span class="bg-lb">${b.name}</span></button>`).join('');
 $('#bgGrid').onclick = e => { const t = e.target.closest('button'); if (t) setBg(t.dataset.id); };
 $('#bgBtn').onclick = () => stepBg(1);
 $('#dBg').onclick = () => stepBg(1);
