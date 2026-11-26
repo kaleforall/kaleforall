@@ -119,6 +119,91 @@
   #sheet.show{display:flex}
   #sheet .in{background:var(--card);width:100%;border-radius:18px 18px 0 0;padding:16px 14px calc(16px + env(safe-area-inset-bottom))}
   #sheet textarea{width:100%;height:46vh;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:10px;font:12px ui-monospace,Menlo,monospace}
+
+  /* ---------- header dash button ---------- */
+  .hdr-r{display:flex;align-items:center}
+  #dashBtn{min-height:34px;padding:7px 12px;font-size:13px;border-radius:999px;margin-right:8px;background:var(--card2);color:var(--accent)}
+
+  /* ---------- dash view (sideways iPad) ----------
+     Written for old iPads too (iOS 12): no flex "gap", no "inset", no clamp(). */
+  body.dash-on{overflow:hidden}
+  body.dash-on .wrap{display:none}
+  #dash{position:fixed;top:0;left:0;right:0;bottom:0;z-index:15;display:flex;flex-direction:column;
+    background:radial-gradient(120% 90% at 15% 0%,#121a24 0%,#07090c 62%);
+    padding:max(12px,env(safe-area-inset-top)) max(16px,env(safe-area-inset-right)) max(12px,env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left));
+    font-variant-numeric:tabular-nums;-webkit-user-select:none;user-select:none}
+  .d-top{display:flex;align-items:center;min-height:54px;padding:6px 8px 6px 16px;border-radius:16px;background:rgba(255,255,255,.035);border:1px solid #1c232c;flex:none}
+  .d-clock{font-size:22px;font-weight:700;letter-spacing:-.3px;color:#cfd8e2;padding-right:14px;margin-right:14px;border-right:1px solid #252d37;flex:none}
+  .d-state{flex:1;min-width:0;display:flex;align-items:center;white-space:nowrap;overflow:hidden}
+  .d-dot{width:10px;height:10px;border-radius:50%;background:var(--dim);margin-right:10px;flex:none}
+  .d-state b{font-size:18px;font-weight:750;margin-right:10px;flex:none}
+  #dMsg{color:var(--muted);font-size:14px;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  .d-top.ok .d-dot{background:var(--ok);box-shadow:0 0 10px rgba(47,191,113,.7)} .d-top.ok b{color:var(--ok)}
+  .d-top.warn{background:linear-gradient(180deg,#2e2208,#1e170a);border-color:#6b4d0e}
+  .d-top.warn .d-dot{background:var(--warn)} .d-top.warn b{color:var(--warn)} .d-top.warn #dMsg{color:#f1dcb0}
+  .d-top.alarm{background:linear-gradient(180deg,#3a0f11,#220a0b);border-color:#8a2124;animation:pulse 1.2s ease-in-out infinite}
+  .d-top.alarm .d-dot{background:var(--alarm)} .d-top.alarm b{color:#ff6b6d} .d-top.alarm #dMsg{color:#ffd3d3}
+  .d-btn{min-height:40px;padding:8px 14px;font-size:14px;border-radius:12px;margin-left:8px;flex:none;background:#1b2129}
+  .d-btn.primary{background:var(--accent);color:#04111f}
+  .d-btn.danger{background:#3a1416;color:#ffb3b4}
+  .d-btn.ghost{background:transparent;border:1px solid #2a323d;color:var(--muted)}
+
+  .d-main{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1.55fr;grid-gap:12px;gap:12px;margin-top:12px}
+  .d-hero{border-radius:22px;background:linear-gradient(160deg,#151c26,#0d1117);border:1px solid #1f2731;padding:18px 22px 20px;
+    display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;min-height:0}
+  .d-lbl{font-size:12px;font-weight:700;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
+  .d-spd{flex:1;display:flex;flex-direction:column;justify-content:center;min-height:0}
+  .d-speed{font-size:min(34vh,17vw);font-weight:700;letter-spacing:-.04em;line-height:.95;margin-top:6px;color:#f4f7fa}
+  .d-speed.na{color:var(--dim)}
+  .d-unit{font-size:15px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);margin-top:4px}
+  .d-rpm-row{display:flex;justify-content:space-between;align-items:baseline}
+  .d-rpm-v{font-size:min(7vh,4.2vw);font-weight:750;letter-spacing:-.02em;line-height:1}
+  .d-rpm-v.na{color:var(--dim)}
+  .d-bar{position:relative;height:12px;border-radius:99px;background:#1d242d;margin-top:10px;overflow:hidden}
+  .d-bar .fill{position:absolute;left:0;top:0;bottom:0;width:0;border-radius:99px;background:linear-gradient(90deg,#2f7fd9,#4da3ff);transition:width .6s linear}
+  .d-bar .fill.hot{background:linear-gradient(90deg,#4da3ff,#f5a524 70%,#ff4d4f)}
+  .d-bar .tick{position:absolute;top:0;bottom:0;left:83.3%;width:2px;background:rgba(255,77,79,.75)}
+  .d-scale{display:flex;justify-content:space-between;font-size:11px;color:var(--dim);margin-top:6px}
+
+  .d-grid{display:grid;grid-template-columns:1fr 1fr 1fr;grid-template-rows:1fr 1fr;grid-gap:12px;gap:12px;min-height:0}
+  .d-tile{position:relative;border-radius:20px;background:#10151b;border:1px solid #1f2731;padding:16px 18px 14px;
+    display:flex;flex-direction:column;justify-content:space-between;overflow:hidden;min-height:0}
+  .d-tile::before{content:"";position:absolute;left:0;top:0;right:0;height:4px;background:#2b3440}
+  .d-tile.ok::before{background:var(--ok)}
+  .d-tile.warn{background:#1d1709;border-color:#6b4d0e} .d-tile.warn::before{background:var(--warn)} .d-tile.warn .d-val{color:var(--warn)}
+  .d-tile.alarm{background:#230d0e;border-color:#8a2124} .d-tile.alarm::before{background:var(--alarm)} .d-tile.alarm .d-val{color:#ff6b6d}
+  .d-val{font-size:min(10vh,5.2vw);font-weight:750;letter-spacing:-.03em;line-height:1;white-space:nowrap}
+  .d-val .u{font-size:.38em;font-weight:650;color:var(--muted);margin-left:4px;letter-spacing:0}
+  .d-tile.na .d-val{color:var(--dim)}
+  .d-note{font-size:12px;color:var(--dim);white-space:nowrap}
+
+  .d-bot{display:flex;align-items:center;margin-top:12px;flex:none}
+  .d-chip,.d-mis{display:flex;align-items:center;height:48px;padding:0 14px;border-radius:14px;background:#10151b;border:1px solid #1f2731;
+    margin-right:10px;flex:none;white-space:nowrap}
+  .d-chip{font-size:14px;color:var(--muted)}
+  .d-chip b{color:var(--text);margin-left:8px}
+  .d-chip .dot{margin-right:8px}
+  .d-mis .d-lbl{margin-right:12px;font-size:11px}
+  #dMis{display:flex}
+  .d-bank{display:flex}
+  .d-bank + .d-bank{margin-left:10px;padding-left:10px;border-left:1px solid #252d37}
+  .d-cyl{width:28px;text-align:center;line-height:1}
+  .d-cyl b{display:block;font-size:16px;font-weight:750;color:#b9c4cf}
+  .d-cyl i{display:block;font-style:normal;font-size:10px;color:var(--dim);margin-top:3px}
+  .d-cyl.warn b{color:var(--warn)} .d-cyl.alarm b{color:var(--alarm)}
+  .d-status{flex:1;min-width:0;text-align:right;font-size:12.5px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+  @media (orientation:portrait){
+    .d-main{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+    .d-speed{font-size:min(15vh,24vw)}
+    .d-rpm{margin-top:14px}
+    .d-grid{grid-template-columns:1fr 1fr;grid-template-rows:1fr 1fr 1fr}
+    .d-val{font-size:min(7vh,10vw)}
+    .d-bot{flex-wrap:wrap}
+    .d-status{flex:0 0 100%;text-align:left;margin-top:8px}
+    #dMsg{display:none}
+  }
+  @media (max-width:600px){ .d-clock{display:none} .d-btn{padding:8px 10px} }
 </style>
 </head>
 <body>
@@ -128,7 +213,10 @@
       <h1>Silverado Health</h1>
       <div class="sub">2019 · 5.3L V8 · 8-speed</div>
     </div>
-    <span class="pill" id="pill">Not connected</span>
+    <div class="hdr-r">
+      <button id="dashBtn">Dash view</button>
+      <span class="pill" id="pill">Not connected</span>
+    </div>
   </header>
 
   <section class="banner" id="banner">
@@ -227,6 +315,38 @@
     <b>Parked overnight:</b> unplug the reader so it can't drain the battery.<br>
     <span id="wlNote"></span>
   </footer>
+</div>
+
+<div id="dash" hidden>
+  <div class="d-top" id="dTop">
+    <div class="d-clock" id="dClock"></div>
+    <div class="d-state"><span class="d-dot"></span><b id="dTitle">Not connected</b><span id="dMsg"></span></div>
+    <button class="d-btn" id="dMute" hidden>Mute 10 min</button>
+    <button class="d-btn" id="dDemo">Demo</button>
+    <button class="d-btn primary" id="dConn">Connect</button>
+    <button class="d-btn ghost" id="dExit">Details</button>
+  </div>
+  <div class="d-main">
+    <div class="d-hero">
+      <div class="d-spd">
+        <div class="d-lbl">Speed</div>
+        <div class="d-speed na" id="dSpeed">—</div>
+        <div class="d-unit">mph</div>
+      </div>
+      <div class="d-rpm">
+        <div class="d-rpm-row"><span class="d-lbl">RPM</span><span class="d-rpm-v na" id="dRpm">—</span></div>
+        <div class="d-bar"><div class="fill" id="dRpmFill"></div><div class="tick"></div></div>
+        <div class="d-scale"><span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span><span>6k</span></div>
+      </div>
+    </div>
+    <div class="d-grid" id="dGrid"></div>
+  </div>
+  <div class="d-bot">
+    <div class="d-chip"><span class="dot" id="dCelDot"></span>Check engine<b id="dCel">—</b></div>
+    <div class="d-chip">Codes<b id="dCodes">—</b></div>
+    <div class="d-mis"><span class="d-lbl">Misfires</span><div id="dMis"></div></div>
+    <div class="d-status" id="dStatus"></div>
+  </div>
 </div>
 
 <div id="toast"></div>
@@ -1427,9 +1547,80 @@ function buildUI() {
   $('#bank1').insertAdjacentHTML('beforeend', [1, 3, 5, 7].map(cyl).join(''));
   $('#bank2').insertAdjacentHTML('beforeend', [2, 4, 6, 8].map(cyl).join(''));
   setSwitch('#swSound', S.sound); setSwitch('#swVoice', S.voice);
+  buildDash();
 }
 function setSwitch(sel, on) { const el = $(sel); el.classList.toggle('on', on); el.setAttribute('aria-checked', on); }
-function status(t) { $('#status').textContent = t; }
+function status(t) { $('#status').textContent = t; const ds = $('#dStatus'); if (ds) ds.textContent = t; }
+
+/* ---------- dash view (sideways iPad) ---------- */
+const DASH_TILES = [
+  { k: 'coolantF', label: 'Coolant', unit: '°F', f: r0, note: 'normal 195–225' },
+  { k: 'transF', label: 'Transmission', unit: '°F', f: r0, note: 'normal 150–210' },
+  { k: 'volts', label: 'Charging', unit: 'V', f: r1, note: 'running 12.6–14.8' },
+  { k: 'trim1', label: 'Fuel trim · driver', unit: '%', f: sgn, note: 'ok within ±10' },
+  { k: 'trim2', label: 'Fuel trim · pass.', unit: '%', f: sgn, note: 'ok within ±10' },
+  { k: 'load', label: 'Engine load', unit: '%', f: r0, note: '' },
+];
+S.dash = store.get('th_dash', false);
+const clock12 = () => { const d = new Date(); return (d.getHours() % 12 || 12) + ':' + String(d.getMinutes()).padStart(2, '0'); };
+function buildDash() {
+  $('#dGrid').innerHTML = DASH_TILES.map(t => `<div class="d-tile na" id="d_${t.k}"><div class="d-lbl">${t.label}</div><div class="d-val">—</div><div class="d-note">${t.note}</div></div>`).join('');
+  const cell = n => `<div class="d-cyl" id="dc${n}"><b>–</b><i>${n}</i></div>`;
+  $('#dMis').innerHTML = `<div class="d-bank">${[1, 3, 5, 7].map(cell).join('')}</div><div class="d-bank">${[2, 4, 6, 8].map(cell).join('')}</div>`;
+}
+function setDash(on) {
+  S.dash = on; store.set('th_dash', on);
+  document.body.classList.toggle('dash-on', on);
+  $('#dash').hidden = !on;
+  if (on) { window.scrollTo(0, 0); renderDash(); } else render();
+}
+function renderDash() {
+  if (!S.dash) return;
+  const d = S.data;
+  $('#dClock').textContent = clock12();
+  // status strip mirrors the main banner
+  const bn = $('#banner');
+  const lvl = bn.classList.contains('alarm') ? 'alarm' : bn.classList.contains('warn') ? 'warn' : bn.classList.contains('ok') ? 'ok' : '';
+  $('#dTop').className = 'd-top ' + lvl;
+  $('#dTitle').textContent = $('#bTitle').textContent;
+  $('#dMsg').textContent = [$('#bMsg').textContent, $('#bMore').textContent].filter(Boolean).join('  ');
+  $('#dMute').hidden = $('#bRow').hidden;
+  $('#dConn').textContent = S.running ? 'Disconnect' : 'Connect';
+  $('#dConn').className = 'd-btn ' + (S.running ? 'danger' : 'primary');
+  $('#dDemo').hidden = S.running;
+  // speed + rpm
+  const sp = d.mph, rpm = d.rpm;
+  $('#dSpeed').textContent = sp == null ? '—' : r0(sp);
+  $('#dSpeed').className = 'd-speed' + (sp == null ? ' na' : '');
+  $('#dRpm').textContent = rpm == null ? '—' : r0(rpm);
+  $('#dRpm').className = 'd-rpm-v' + (rpm == null ? ' na' : '');
+  const fill = $('#dRpmFill');
+  fill.style.width = rpm == null ? '0%' : Math.min(100, rpm / 6000 * 100) + '%';
+  fill.className = 'fill' + (rpm > 5000 ? ' hot' : '');
+  // gauges
+  for (const t of DASH_TILES) {
+    const el = $('#d_' + t.k), v = d[t.k], lv = (S.tileLv && S.tileLv[t.k]) || 'ok';
+    if (t.k === 'transF' && S.transSrc === false) { el.className = 'd-tile na'; el.querySelector('.d-val').textContent = 'n/a'; el.querySelector('.d-note').textContent = 'not shared by this truck'; continue; }
+    const na = v == null;
+    el.className = 'd-tile ' + (na ? 'na' : (t.note ? lv : ''));
+    el.querySelector('.d-val').innerHTML = na ? '—' : `${t.f(v)}<span class="u">${t.unit}</span>`;
+  }
+  // misfires
+  const M = S.mis;
+  for (let i = 0; i < 8; i++) {
+    const c = M.cur[i], n = c == null ? null : c - M.base[i], a = S.alerts['mis' + (i + 1)], el = $('#dc' + (i + 1));
+    el.className = 'd-cyl' + (a ? ' ' + a.level : '');
+    el.querySelector('b').textContent = n == null ? '–' : n;
+  }
+  // check engine light + codes
+  const C = S.codes;
+  $('#dCelDot').className = 'dot' + (C.mil == null ? '' : C.mil ? ' alarm' : ' ok');
+  $('#dCel').textContent = C.mil == null ? '—' : C.mil ? 'ON' : 'Off';
+  const pend = C.pending.filter(c => C.stored.indexOf(c) < 0).length;
+  $('#dCodes').textContent = !C.checked ? '—' : (!C.stored.length && !pend) ? 'None' :
+    [C.stored.length ? C.stored.length + ' stored' : '', pend ? pend + ' pending' : ''].filter(Boolean).join(' · ');
+}
+setInterval(() => { if (S.dash) $('#dClock').textContent = clock12(); }, 10000);
 function render() {
   const d = S.data;
   for (const t of TILES) {
@@ -1479,7 +1670,7 @@ function render() {
   const pill = $('#pill');
   pill.className = 'pill' + (S.running ? (S.demo ? ' demo' : ' on') : '');
   pill.textContent = S.running ? (S.demo ? 'Demo' : 'Live') : 'Not connected';
-  renderCloud(); renderSmog(); renderLeak(); renderScan();
+  renderCloud(); renderSmog(); renderLeak(); renderScan(); renderDash();
 }
 
 /* ============================== main loop ============================== */
@@ -1584,6 +1775,11 @@ $('#csvBtn').onclick = async () => {
 };
 $('#clearBtn').onclick = () => { S.log = []; S.logMeta = null; S.history = []; saveLog(); render(); toast('New log started'); };
 $('#sheetClose').onclick = () => $('#sheet').classList.remove('show');
+$('#dashBtn').onclick = () => setDash(true);
+$('#dExit').onclick = () => setDash(false);
+$('#dConn').onclick = () => S.running ? stop() : start(false);
+$('#dDemo').onclick = () => { if (!S.running) start(true); };
+$('#dMute').onclick = () => $('#ackBtn').onclick();
 
 $('#cfgSave').onclick = testCloud;
 $('#scanBtn').onclick = startScan;
@@ -1595,6 +1791,7 @@ $('#cfgRepo').value = S.cfg.repo || 'kaleforall/truck-logs'; $('#cfgToken').valu
 
 buildUI(); render(); setButtons(); checkStaleDrive(); flushQueue();
 if (!navigator.bluetooth) status('Open this page in the free Bluefy app to connect. Demo works anywhere.');
+setDash(S.dash);
 
 // test hooks
 window.__TH = { S, toBytes, cleanLines, parseDtcs, parseMode06, decodeDtc, summary, warmMisfires, csv, LIMITS, finishDrive, trackDrive, flushQueue, parseReadiness, smogVerdict, leakFindings, leakVerdict, framesH1, isotp, P01, SCAN, scanSummary };
