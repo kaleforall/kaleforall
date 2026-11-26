@@ -340,6 +340,7 @@
     <div class="toggle" style="margin-top:12px"><span>Background</span>
       <span class="bg-pick"><button id="bgPrev" aria-label="Previous background">&lsaquo;</button><b id="bgName">Plain dark</b><button id="bgNext" aria-label="Next background">&rsaquo;</button></span></div>
     <div class="bg-grid" id="bgGrid"></div>
+    <div class="hint" id="bgCredit" style="margin:8px 0 0"></div>
   </section>
 
   <footer>
@@ -1880,28 +1881,49 @@ $('#dDemo').onclick = () => { if (!S.running) start(true); };
 $('#dMute').onclick = () => $('#ackBtn').onclick();
 
 /* ============================== backgrounds ============================== */
+// Real Oregon photos are public domain (US government) and load straight from the agency sites (big files, cached after the first time).
+const PD = 'https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/';
 const BGS = [
   { id: 'none', name: 'Plain dark' },
   { id: 'truck-front', name: 'My truck', src: 'bg/truck-front.jpg', thumb: 'bg/truck-front-thumb.jpg', pos: '50% 42%' },
   { id: 'truck-side', name: 'My truck, side', src: 'bg/truck-side.jpg', thumb: 'bg/truck-side-thumb.jpg', pos: '42% 38%' },
-  { id: 'forest', name: 'Oregon forest', src: 'bg/forest.svg' },
-  { id: 'river', name: 'Forest river', src: 'bg/river.svg' },
-  { id: 'coast', name: 'Oregon coast', src: 'bg/coast.svg' },
-  { id: 'mountain', name: 'Mountain lake', src: 'bg/mountain.svg' },
-  { id: 'night', name: 'Starry night', src: 'bg/night.svg' },
+  { id: 'forest', name: 'Old-growth firs', src: 'https://www.fws.gov/sites/default/files/images/2010-10/12573.jpg',
+    credit: 'Old-growth Douglas fir, Forest Park, Portland. Photo: David Patte / USFWS (public domain).' },
+  { id: 'river', name: 'Opal Creek', src: 'https://www.fws.gov/sites/default/files/images/2005-06/12575.jpg',
+    credit: 'Opal Creek Wilderness, Willamette National Forest. Photo: David Patte / USFWS (public domain).' },
+  { id: 'firs-up', name: 'McKenzie Pass firs', src: PD + 'thumbnails/image/7857.jpg',
+    credit: 'Douglas firs at McKenzie Pass, Willamette National Forest. Photo: David Goodrich / NOAA, via USGS (public domain).' },
+  { id: 'mountain', name: 'Crater Lake', src: PD + 'media/images/IMG-8749.jpg',
+    credit: 'Crater Lake sunrise. Photo: Miel Corbett, via USGS (public domain).' },
 ];
+const BG_OLD = { coast: 'forest', night: 'firs-up' };          // drawn scenes that were replaced by photos
 function setBg(id, quiet) {
-  const b = BGS.find(x => x.id === id) || BGS[0], el = $('#bg');
+  const b = BGS.find(x => x.id === (BG_OLD[id] || id)) || BGS[0], el = $('#bg');
   S.bg = b.id; store.set('th_bg', b.id);
   el.style.backgroundImage = b.src ? `url("${b.src}")` : 'none';
   el.style.backgroundPosition = b.pos || '50% 50%';
   document.body.classList.toggle('has-bg', !!b.src);
   $('#bgName').textContent = b.name;
+  $('#bgCredit').textContent = b.credit || '';
   Array.prototype.forEach.call(document.querySelectorAll('#bgGrid button'), x => x.classList.toggle('on', x.dataset.id === b.id));
   if (!quiet) toast(b.name);
+  if (b.src && /^https?:/.test(b.src)) {                     // remote photo: say so if it can't load (no signal, or the site moved it)
+    const im = new Image();
+    im.onerror = () => { if (S.bg === b.id) toast(`Couldn't load ${b.name} — no signal?`); };
+    im.src = b.src;
+  }
 }
 function stepBg(d) { const i = BGS.findIndex(x => x.id === S.bg); setBg(BGS[(i + d + BGS.length) % BGS.length].id); }
-$('#bgGrid').innerHTML = BGS.map(b => `<button data-id="${b.id}" aria-label="${b.name}"><span class="bg-th"${b.src ? ` style="background-image:url('${b.thumb || b.src}')"` : ''}></span><span class="bg-lb">${b.name}</span></button>`).join('');
+$('#bgGrid').innerHTML = BGS.map(b => `<button data-id="${b.id}" aria-label="${b.name}"><span class="bg-th"></span><span class="bg-lb">${b.name}</span></button>`).join('');
+function loadThumbs() {                                        // only fetch the big photos for thumbnails once the picker is on screen
+  Array.prototype.forEach.call(document.querySelectorAll('#bgGrid button'), x => {
+    const b = BGS.find(y => y.id === x.dataset.id); if (b && b.src) x.firstChild.style.backgroundImage = `url("${b.thumb || b.src}")`;
+  });
+}
+if ('IntersectionObserver' in window) {
+  const io = new IntersectionObserver(es => { if (es.some(e => e.isIntersecting)) { loadThumbs(); io.disconnect(); } });
+  io.observe($('#bgGrid'));
+} else loadThumbs();
 $('#bgGrid').onclick = e => { const t = e.target.closest('button'); if (t) setBg(t.dataset.id); };
 $('#bgBtn').onclick = () => stepBg(1);
 $('#dBg').onclick = () => stepBg(1);
