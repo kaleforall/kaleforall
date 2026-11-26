@@ -204,9 +204,37 @@
     #dMsg{display:none}
   }
   @media (max-width:600px){ .d-clock{display:none} .d-btn{padding:8px 10px} }
+
+  /* ---------- backgrounds (truck photos / Oregon scenes) ----------
+     A fixed picture behind everything, a dark fade over it, and see-through cards so the numbers stay easy to read. */
+  #bg{position:fixed;top:0;left:0;right:0;bottom:0;z-index:0;background-color:var(--bg);background-repeat:no-repeat;background-size:cover;background-position:50% 50%;pointer-events:none}
+  #bg::after{content:"";position:absolute;top:0;left:0;right:0;bottom:0;
+    background:linear-gradient(180deg,rgba(7,9,12,.62) 0%,rgba(7,9,12,.38) 30%,rgba(7,9,12,.5) 65%,rgba(7,9,12,.8) 100%)}
+  .wrap{position:relative;z-index:1}
+  body.has-bg .card,body.has-bg .tile:not(.warn):not(.alarm),body.has-bg .banner:not(.ok):not(.warn):not(.alarm),
+  body.has-bg .d-hero,body.has-bg .d-tile:not(.warn):not(.alarm),body.has-bg .d-chip,body.has-bg .d-mis,body.has-bg .d-top:not(.warn):not(.alarm){
+    background:rgba(13,17,22,.66);-webkit-backdrop-filter:blur(14px) saturate(1.2);backdrop-filter:blur(14px) saturate(1.2);border-color:rgba(255,255,255,.09)}
+  body.has-bg .banner.ok{background:linear-gradient(180deg,rgba(16,38,26,.84),rgba(15,26,20,.84));-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px)}
+  body.has-bg h1,body.has-bg .sub,body.has-bg .status,body.has-bg footer{text-shadow:0 1px 2px rgba(0,0,0,.95),0 0 8px rgba(0,0,0,.6)}
+  body.has-bg .sub,body.has-bg .status{color:#c8d1db}
+  body.has-bg #dash{background:transparent}
+  .icon-btn{min-height:34px;width:38px;padding:0;border-radius:999px;margin-right:8px;background:var(--card2);color:var(--accent);display:inline-flex;align-items:center;justify-content:center}
+  .icon-btn svg{width:19px;height:19px;display:block}
+  .d-btn.icon{width:44px;padding:0;display:flex;align-items:center;justify-content:center}
+  .d-btn.icon svg{width:20px;height:20px}
+  .bg-pick{display:flex;align-items:center}
+  .bg-pick b{min-width:128px;text-align:center;font-size:14.5px}
+  .bg-pick button{min-height:38px;width:42px;padding:0;font-size:22px;line-height:1;border-radius:12px}
+  .bg-grid{display:grid;grid-template-columns:repeat(4,1fr);grid-gap:8px;gap:8px;margin-top:8px}
+  .bg-grid button{padding:0;min-height:0;background:none;border-radius:12px;text-align:center;color:var(--muted)}
+  .bg-grid .bg-th{display:block;height:76px;border-radius:12px;border:2px solid var(--line);background:linear-gradient(160deg,#151c26,#07090c) center/cover no-repeat}
+  .bg-grid .bg-lb{display:block;font-size:11px;font-weight:600;margin-top:4px;line-height:1.2}
+  .bg-grid button.on .bg-th{border-color:var(--accent);box-shadow:0 0 0 2px rgba(77,163,255,.35)}
+  .bg-grid button.on .bg-lb{color:var(--text)}
 </style>
 </head>
 <body>
+<div id="bg"></div>
 <div class="wrap">
   <header>
     <div>
@@ -214,6 +242,7 @@
       <div class="sub">2019 · 5.3L V8 · 8-speed</div>
     </div>
     <div class="hdr-r">
+      <button class="icon-btn" id="bgBtn" aria-label="Next background" title="Next background"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l6-8 4 5 3-3 5 6z"/><circle cx="16" cy="7" r="2"/></svg></button>
       <button id="dashBtn">Dash view</button>
       <span class="pill" id="pill">Not connected</span>
     </div>
@@ -308,6 +337,9 @@
     <div class="toggle"><span>Alarm sound</span><span class="switch" id="swSound" role="switch"></span></div>
     <div class="toggle"><span>Speak alerts out loud</span><span class="switch" id="swVoice" role="switch"></span></div>
     <div class="btns"><button class="small" id="testBtn">Test alarm</button></div>
+    <div class="toggle" style="margin-top:12px"><span>Background</span>
+      <span class="bg-pick"><button id="bgPrev" aria-label="Previous background">&lsaquo;</button><b id="bgName">Plain dark</b><button id="bgNext" aria-label="Next background">&rsaquo;</button></span></div>
+    <div class="bg-grid" id="bgGrid"></div>
   </section>
 
   <footer>
@@ -324,6 +356,7 @@
     <button class="d-btn" id="dMute" hidden>Mute 10 min</button>
     <button class="d-btn" id="dDemo">Demo</button>
     <button class="d-btn primary" id="dConn">Connect</button>
+    <button class="d-btn ghost icon" id="dBg" aria-label="Next background" title="Next background"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 19l6-8 4 5 3-3 5 6z"/><circle cx="16" cy="7" r="2"/></svg></button>
     <button class="d-btn ghost" id="dExit">Details</button>
   </div>
   <div class="d-main">
@@ -369,6 +402,7 @@ const LIMITS = {
   trimWarn: 12, trimAlarm: 25, trimSplit: 12,
   misWarn: 10, misAlarm: 25, misBurst: 20, misBurstMin: 5, misWarmF: 160,
   noDataSec: 15,
+  mapJumpKpa: 15, mapJumpMph: 25,
 };
 const u16 = n => '0000' + n.toString(16).padStart(4, '0') + '-0000-1000-8000-00805f9b34fb';
 const SERVICE_UUIDS = [
@@ -378,6 +412,9 @@ const SERVICE_UUIDS = [
   '6e400001-b5a3-f393-e0a9-e50e24dcca9e',  // Nordic UART
 ];
 const ECM = '7E0', TCM = '7E2';
+// GM-only engine-computer values that might be the cylinder-shutoff (DFM) signal. Picked from the 11/24/2026 scan:
+// steady while parked and reading 8 or FF ("all 8 firing"). NOT confirmed yet — logged so a drive can prove which one it is.
+const CYL_DIDS = ['1128', '1232', '1233', '12DF', '150A', '152C', '2035'];
 
 const DTC_TEXT = {
   P0300:'Random misfire', P0301:'Cylinder 1 misfire', P0302:'Cylinder 2 misfire', P0303:'Cylinder 3 misfire',
@@ -520,7 +557,10 @@ class DemoTruck {
     // cylinder 3 starts missing after 40 s
     if (t > 40 && t - this.lastMisT >= 3) { this.mis[2] += 1; this.lastMisT = t; }
     const leak = mph < 1 && t > 40 ? 9 : 0;   // demo: small driver-side manifold leak shows at idle
-    return { rpm, mph, load, coolC, transC, volts: rpm > 400 ? 14.25 + j(.08) : 12.6, stft1: 2 + leak + j(3), ltft1: 4, stft2: 1 + j(3), ltft2: 5, iat: 24, timing: 18 + j(6), o2r1: 0.68 + j(.05), o2r2: 0.7 + j(.05) };
+    // demo cylinder shutoff (only with window.__demoDfm): steady cruise, last 20 s of every minute — manifold pressure jumps
+    const dfm = !!window.__demoDfm && t > 30 && mph > 30 && (t % 60) > 40;
+    const map = mph < 1 ? 30 + j(1) : t < 20 ? 55 + j(3) : 35 + j(1.5) + (dfm ? 28 : 0);
+    return { rpm, mph, load, coolC, transC, map, dfm, volts: rpm > 400 ? 14.25 + j(.08) : 12.6, stft1: 2 + leak + j(3), ltft1: 4, stft2: 1 + j(3), ltft2: 5, iat: 24, timing: 18 + j(6), o2r1: 0.68 + j(.05), o2r2: 0.7 + j(.05) };
   }
   hex(b) { return b.map(x => x.toString(16).toUpperCase().padStart(2, '0')).join(this.spaces ? ' ' : ''); }
   frames(b) {
@@ -587,7 +627,7 @@ class DemoTruck {
         0x01: [0x00, 0x07, 0xE5, 0x04], 0x13: [0x33], 0x15: [Math.round(v.o2r1 * 200), 0xFF], 0x19: [Math.round(v.o2r2 * 200), 0xFF], 0x30: [84], 0x31: w(1996), 0x04: [Math.round(v.load * 2.55)], 0x05: [Math.round(v.coolC + 40)],
         0x06: [tr(v.stft1)], 0x07: [tr(v.ltft1)], 0x08: [tr(v.stft2)], 0x09: [tr(v.ltft2)],
         0x0C: w(Math.round(v.rpm * 4)), 0x0D: [Math.round(v.mph / 0.621371)], 0x0E: [Math.round((v.timing + 64) * 2)],
-        0x0F: [v.iat + 40], 0x42: w(Math.round(v.volts * 1000)),
+        0x0F: [v.iat + 40], 0x42: w(Math.round(v.volts * 1000)), 0x0B: [Math.round(v.map)],
       };
       return map[P] ? [0x41, P, ...map[P]] : null;
     }
@@ -609,6 +649,8 @@ class DemoTruck {
       if (P === 0x1470) return [0x7F, 0x22, 0x33];                                  // pretend this one is locked
       const gm = { 0x1154: () => [Math.round(v.coolC + 37)], 0x115C: () => [Math.round(40 + v.rpm / 50)], 0x11A6: () => [Math.round(Math.random() * 4)], 0x119C: () => [178], 0x203F: () => [Math.round(v.rpm / 200)] };
       for (let c = 0; c < 8; c++) gm[0x1205 + c] = () => [0, this.mis[c] & 255];
+      for (const id of CYL_DIDS) gm[parseInt(id, 16)] = () => [0xFF];
+      gm[0x1128] = () => [v.dfm ? 4 : 8];                                           // demo: pretend 1128 is "cylinders firing"
       const g = gm[P]; return g ? [0x62, P >> 8, P & 255, ...g()] : [0x7F, 0x22, 0x31];
     }
     if (m === '1A') return P === 0xB0 ? [0x5A, 0xB0, 0x11] : P === 0x90 ? [0x5A, 0x90, ...asc(DEMO_VIN)] : [0x7F, 0x1A, 0x31];
@@ -629,7 +671,7 @@ const S = {
   elm: null, demo: false, running: false, header: null, sup: null,
   data: {}, fails: {}, transSrc: null, transFails: 0,
   mis: { cur: Array(8).fill(null), ewma: Array(8).fill(null), base: Array(8).fill(null), warm: Array(8).fill(0), hist: [[], [], [], [], [], [], [], []], supported: null, fails: 0 },
-  codes: { mil: null, stored: [], pending: [], checked: 0 },
+  codes: { mil: null, stored: [], pending: [], checked: 0 }, gm: { val: {}, ok: {}, fails: {} },
   alerts: {}, cond: {}, history: [], lastOk: 0, engineOnAt: null,
   log: store.get('th_log', []), logMeta: store.get('th_meta', null), rate: 0,
   sound: store.get('th_sound', true), voice: store.get('th_voice', true), lastBeep: 0, wl: null,
@@ -688,6 +730,7 @@ async function readFast() {
   b = await q01('0D'); if (b) d.mph = b[0] * 0.621371;
   b = await q01('05'); if (b) d.coolantF = cToF(b[0] - 40);
   b = await q01('04'); if (b) d.load = b[0] * 100 / 255;
+  if (has(0x0B)) { b = await q01('0B'); if (b) d.map = b[0]; }          // manifold pressure, kPa — jumps when cylinders shut off
   const okV = x => x >= 6 && x <= 20;                                   // the computer reports 0 V while it powers down
   const engineOff = d.rpm != null && d.rpm < 100;
   if (!engineOff && has(0x42) && (S.fails.v42 || 0) < 3) { b = await q01('42'); const x = b ? ((b[0] << 8) | b[1]) / 1000 : null; if (x != null && okV(x)) { d.volts = x; S.fails.v42 = 0; } else S.fails.v42 = (S.fails.v42 || 0) + 1; }
@@ -717,6 +760,13 @@ async function readTrans() {
   }
   if (!got && ++S.transFails >= 3 && !S.transSrc) S.transSrc = false;
   await setHeader(ECM);
+}
+async function readCyl(i) {                     // one candidate per pass; gives up on a value only if it has never answered
+  const did = CYL_DIDS[i % CYL_DIDS.length], G = S.gm;
+  if (!G.ok[did] && (G.fails[did] || 0) >= 3) return;
+  const b = await q22(did, ECM);
+  if (b && b.length) { G.val[did] = b.map(x => x.toString(16).toUpperCase().padStart(2, '0')).join(''); G.ok[did] = true; G.fails[did] = 0; }
+  else G.fails[did] = (G.fails[did] || 0) + 1;
 }
 async function readMisfire(i) {
   const M = S.mis; if (M.supported === false) return;
@@ -1375,13 +1425,16 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 
 /* ============================== log ============================== */
 const COLS = ['time', 'rpm', 'mph', 'coolant_F', 'trans_F', 'volts', 'load_pct', 'stft1', 'ltft1', 'stft2', 'ltft2', 'trim_driver', 'trim_pass', 'iat_F', 'timing_deg',
-  'mis1', 'mis2', 'mis3', 'mis4', 'mis5', 'mis6', 'mis7', 'mis8', 'mil', 'codes', 'alerts'];
+  'mis1', 'mis2', 'mis3', 'mis4', 'mis5', 'mis6', 'mis7', 'mis8', 'mil', 'codes', 'alerts',
+  'map_kPa', ...CYL_DIDS.map(d => 'gm' + d)];                 // new columns go on the end so older column positions don't move
+const C_MAP = COLS.indexOf('map_kPa');
 function logRow(now) {
   const d = S.data, M = S.mis, f1 = x => x == null ? '' : Math.round(x * 10) / 10;
   S.log.push([new Date(now).toISOString(), f1(d.rpm), f1(d.mph), f1(d.coolantF), f1(d.transF), d.volts == null ? '' : Math.round(d.volts * 100) / 100, f1(d.load),
     f1(d.stft1), f1(d.ltft1), f1(d.stft2), f1(d.ltft2), f1(d.trim1), f1(d.trim2), f1(d.iatF), f1(d.timing),
     ...M.cur.map((c, i) => c == null ? '' : c - M.base[i]), S.codes.mil == null ? '' : (S.codes.mil ? 1 : 0),
-    [...S.codes.stored, ...S.codes.pending.map(c => c + '(p)')].join(' '), Object.keys(S.alerts).join(' ')]);
+    [...S.codes.stored, ...S.codes.pending.map(c => c + '(p)')].join(' '), Object.keys(S.alerts).join(' '),
+    d.map == null ? '' : d.map, ...CYL_DIDS.map(k => S.gm.val[k] || '')]);
   if (S.log.length > 12000) S.log.splice(0, S.log.length - 12000);
   if (!S.logMeta) S.logMeta = { start: now, reader: S.elm ? S.elm.name : '', demo: S.demo };
   if (S.log.length % 20 === 0) saveLog();
@@ -1409,6 +1462,49 @@ function warmMisfires(rows) {
   }
   return out;
 }
+// Cylinder-shutoff watch, worked out from the logged rows (so a drive saved later still gets it).
+// GM value changes only count while the engine runs. A "pressure jump" = manifold pressure up 15+ kPa within 1–5 s
+// at 25+ mph with speed and rpm steady, then staying up for the next 8 s without the truck speeding up.
+function cylWatch(rows) {
+  const L = LIMITS, run = r => +r[1] > 400, T = r => Date.parse(r[0]), has = v => v !== '' && v != null;
+  const vals = {}, changes = [];
+  CYL_DIDS.forEach((did, k) => {
+    const idx = C_MAP + 1 + k; let prev = null; vals[did] = [];
+    for (const r of rows) {
+      const v = r[idx]; if (!has(v) || !run(r)) continue;
+      if (prev != null && v !== prev) changes.push({ did, from: prev, to: v, at: T(r) });
+      if (!vals[did].includes(v)) vals[did].push(v);
+      prev = v;
+    }
+  });
+  changes.sort((a, b) => a.at - b.at);
+  const cr = rows.filter(r => run(r) && has(r[C_MAP]) && +r[2] >= L.mapJumpMph), jumps = [];
+  let lastJ = -Infinity;
+  for (let i = 0; i < cr.length; i++) {
+    const a = cr[i], ta = T(a); if (ta - lastJ < 30000) continue;
+    for (let j = i + 1; j < cr.length; j++) {
+      const b = cr[j], tb = T(b), dt = tb - ta; if (dt > 5000) break; if (dt < 1000) continue;
+      if (+b[C_MAP] - +a[C_MAP] < L.mapJumpKpa || Math.abs(+b[2] - +a[2]) > 2 || Math.abs(+b[1] - +a[1]) > 200) continue;
+      const after = cr.filter(r => { const t = T(r); return t > tb && t <= tb + 8000; });
+      if (after.length >= 3 && after.every(r => +r[C_MAP] >= +a[C_MAP] + 10 && Math.abs(+r[2] - +a[2]) <= 3)) { jumps.push({ at: tb, from: +a[C_MAP], to: +b[C_MAP] }); lastJ = tb; }
+      break;
+    }
+  }
+  return { vals, changes, jumps, any: CYL_DIDS.some(d => vals[d].length),
+    map: stats(rows, C_MAP, r => run(r) && +r[2] >= L.mapJumpMph), mapAny: stats(rows, C_MAP, run) };
+}
+function cylLine(rows) {
+  const w = cylWatch(rows), g = x => Math.round(x), sp = LIMITS.mapJumpMph;
+  if (!w.any && !w.mapAny) return 'Cylinder shutoff watch: no data';
+  const parts = [];
+  if (!w.any) parts.push('GM values: no answer');
+  else if (!w.changes.length) parts.push('GM values steady (' + CYL_DIDS.filter(d => w.vals[d].length).map(d => `${d}=${w.vals[d][0]}`).join(', ') + ')');
+  else parts.push('GM values CHANGED: ' + w.changes.slice(0, 6).map(c => `${c.did} ${c.from}→${c.to} at ${hhmm(c.at)}`).join('; ') + (w.changes.length > 6 ? ` (+${w.changes.length - 6} more)` : ''));
+  parts.push(w.map ? `manifold pressure at ${sp}+ mph: min ${g(w.map.min)} / avg ${g(w.map.avg)} / max ${g(w.map.max)} kPa`
+    : w.mapAny ? `manifold pressure: no ${sp}+ mph driving` : 'manifold pressure: no data');
+  parts.push('steady-speed pressure jumps (possible shutoff): ' + (w.jumps.length ? w.jumps.length + ' (' + w.jumps.slice(0, 6).map(j => `${hhmm(j.at)} ${j.from}→${j.to} kPa`).join(', ') + ')' : 'none'));
+  return 'Cylinder shutoff watch: ' + parts.join(' · ');
+}
 function summary(rows, opts) {
   rows = rows || S.log; opts = opts || {};
   if (!rows.length) return 'No drive data recorded yet.';
@@ -1430,7 +1526,7 @@ function summary(rows, opts) {
     `${pre}Misfires once warm (160°F+), cyl 1–8: ${warmMisfires(rows).join(' ')}`,
     `${pre}10-drive misfire average, cyl 1–8: ${((opts.ewma && opts.ewma.some(x => x != null)) ? opts.ewma : S.mis.ewma).map(x => x == null ? '-' : x).join(' ')}`,
     `${pre}Check engine light: ${lastRow[23] === '' ? '?' : +lastRow[23] ? 'ON' : 'off'} · Codes at end: ${codes || 'none'} ((p) = pending)`,
-    pre + smogLine(), pre + leakLine(),
+    pre + smogLine(), pre + leakLine(), pre + cylLine(rows),
     `${pre}Alerts: ${hist.length ? hist.map(h => `${hhmm(h.at)} ${h.title} (${h.level})`).join('; ') : 'none'}`,
   ].filter(x => x != null).join('\n');
 }
@@ -1686,6 +1782,7 @@ async function loop() {
       if (cycle % 2 === 0 || S.leakTest) await readTrims();
       if (cycle % 3 === 1) await readTrans();
       if (!S.leakTest) await readMisfire(cycle % 8);
+      if (!S.leakTest) await readCyl(cycle);
       if (cycle % 30 === 0 || S.smogNow) { S.smogNow = false; await readStatus(); }
       if (cycle % 60 === 2) await readPending();
       const now = Date.now();
@@ -1706,6 +1803,7 @@ async function start(demo) {
   S.demo = demo; S.data = {}; S.alerts = {}; S.cond = {}; S.fails = {}; S.transSrc = null; S.transFails = 0; S.lastOk = 0; S.engineOnAt = null;
   S.mis = { cur: Array(8).fill(null), ewma: Array(8).fill(null), base: Array(8).fill(null), warm: Array(8).fill(0), hist: [[], [], [], [], [], [], [], []], supported: null, fails: 0 };
   S.codes = { mil: null, stored: [], pending: [], checked: 0 };
+  S.gm = { val: {}, ok: {}, fails: {} };
   S.smog = null; S.leak = newLeak(); S.leakTest = null; S.leakTestResult = null;
   if (demo || (S.logMeta && S.logMeta.demo)) { S.log = []; S.logMeta = null; S.history = []; }
   try {
@@ -1781,6 +1879,36 @@ $('#dConn').onclick = () => S.running ? stop() : start(false);
 $('#dDemo').onclick = () => { if (!S.running) start(true); };
 $('#dMute').onclick = () => $('#ackBtn').onclick();
 
+/* ============================== backgrounds ============================== */
+const BGS = [
+  { id: 'none', name: 'Plain dark' },
+  { id: 'truck-front', name: 'My truck', src: 'bg/truck-front.jpg', thumb: 'bg/truck-front-thumb.jpg', pos: '50% 42%' },
+  { id: 'truck-side', name: 'My truck, side', src: 'bg/truck-side.jpg', thumb: 'bg/truck-side-thumb.jpg', pos: '42% 38%' },
+  { id: 'forest', name: 'Oregon forest', src: 'bg/forest.svg' },
+  { id: 'river', name: 'Forest river', src: 'bg/river.svg' },
+  { id: 'coast', name: 'Oregon coast', src: 'bg/coast.svg' },
+  { id: 'mountain', name: 'Mountain lake', src: 'bg/mountain.svg' },
+  { id: 'night', name: 'Starry night', src: 'bg/night.svg' },
+];
+function setBg(id, quiet) {
+  const b = BGS.find(x => x.id === id) || BGS[0], el = $('#bg');
+  S.bg = b.id; store.set('th_bg', b.id);
+  el.style.backgroundImage = b.src ? `url("${b.src}")` : 'none';
+  el.style.backgroundPosition = b.pos || '50% 50%';
+  document.body.classList.toggle('has-bg', !!b.src);
+  $('#bgName').textContent = b.name;
+  Array.prototype.forEach.call(document.querySelectorAll('#bgGrid button'), x => x.classList.toggle('on', x.dataset.id === b.id));
+  if (!quiet) toast(b.name);
+}
+function stepBg(d) { const i = BGS.findIndex(x => x.id === S.bg); setBg(BGS[(i + d + BGS.length) % BGS.length].id); }
+$('#bgGrid').innerHTML = BGS.map(b => `<button data-id="${b.id}" aria-label="${b.name}"><span class="bg-th"${b.src ? ` style="background-image:url('${b.thumb || b.src}')"` : ''}></span><span class="bg-lb">${b.name}</span></button>`).join('');
+$('#bgGrid').onclick = e => { const t = e.target.closest('button'); if (t) setBg(t.dataset.id); };
+$('#bgBtn').onclick = () => stepBg(1);
+$('#dBg').onclick = () => stepBg(1);
+$('#bgPrev').onclick = () => stepBg(-1);
+$('#bgNext').onclick = () => stepBg(1);
+setBg(store.get('th_bg', 'none'), true);
+
 $('#cfgSave').onclick = testCloud;
 $('#scanBtn').onclick = startScan;
 $('#scanExp').onclick = exportScan;
@@ -1794,7 +1922,7 @@ if (!navigator.bluetooth) status('Open this page in the free Bluefy app to conne
 setDash(S.dash);
 
 // test hooks
-window.__TH = { S, toBytes, cleanLines, parseDtcs, parseMode06, decodeDtc, summary, warmMisfires, csv, LIMITS, finishDrive, trackDrive, flushQueue, parseReadiness, smogVerdict, leakFindings, leakVerdict, framesH1, isotp, P01, SCAN, scanSummary };
+window.__TH = { S, toBytes, cleanLines, parseDtcs, parseMode06, decodeDtc, summary, warmMisfires, csv, LIMITS, finishDrive, trackDrive, flushQueue, parseReadiness, smogVerdict, leakFindings, leakVerdict, framesH1, isotp, P01, SCAN, scanSummary, cylWatch, cylLine, COLS };
 })();
 </script>
 </body>
