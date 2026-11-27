@@ -232,6 +232,35 @@
   .bg-grid .bg-lb{display:block;font-size:11px;font-weight:600;margin-top:4px;line-height:1.2}
   .bg-grid button.on .bg-th{border-color:var(--accent);box-shadow:0 0 0 2px rgba(77,163,255,.35)}
   .bg-grid button.on .bg-lb{color:var(--text)}
+
+  /* ---------- mileage, service, fuel (no flex gap: old iPads) ---------- */
+  .odo-big{font-size:34px;font-weight:800;letter-spacing:-.8px;font-variant-numeric:tabular-nums;line-height:1.1;margin-top:4px}
+  .odo-big .u{font-size:15px;font-weight:600;color:var(--muted);margin-left:4px;letter-spacing:0}
+  .odo-src{font-size:12.5px;color:var(--muted);margin:2px 0 6px}
+  .mt{padding:11px 0 10px;border-top:1px solid var(--line)}
+  .mt-top{display:flex;justify-content:space-between;align-items:baseline}
+  .mt-name{font-size:15px;font-weight:700}
+  .mt-left{font-size:14.5px;font-weight:750;font-variant-numeric:tabular-nums;text-align:right;margin-left:10px;white-space:nowrap}
+  .mt.ok .mt-left{color:var(--ok)} .mt.warn .mt-left{color:var(--warn)} .mt.alarm .mt-left{color:#ff6b6d} .mt.na .mt-left{color:var(--muted)}
+  .mt-bar{height:6px;border-radius:99px;background:var(--card2);margin:7px 0 6px;overflow:hidden}
+  .mt-bar i{display:block;height:100%;width:0;border-radius:99px;background:var(--ok)}
+  .mt.warn .mt-bar i{background:var(--warn)} .mt.alarm .mt-bar i{background:var(--alarm)} .mt.na .mt-bar i{background:var(--dim)}
+  .mt-sub{font-size:12.5px;color:var(--muted);line-height:1.4}
+  .mt-btns{display:flex;margin-top:8px}
+  .mt-btns button{flex:1;margin-right:8px} .mt-btns button:last-child{margin-right:0;flex:0 0 84px}
+  button.confirm{background:var(--warn)!important;color:#1a1200!important}
+  .form{background:var(--card2);border-radius:14px;padding:2px 12px 12px;margin-top:10px}
+  .f2{display:flex} .f2 .field{flex:1;min-width:0;margin-right:8px} .f2 .field:last-child{margin-right:0}
+  .more{width:100%;margin-top:8px;background:transparent;border:1px solid var(--line);color:var(--muted)}
+  .chk{display:flex;align-items:center;justify-content:space-between;margin-top:12px;font-size:15px}
+  .fills{margin-top:10px}
+  .fills .fl{display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:13.5px}
+  .fills .fl b{font-size:14.5px}
+  .fills .fl span{white-space:nowrap} .fills .x{vertical-align:middle}
+  .fills .x{min-height:30px;padding:3px 10px;font-size:13px;border-radius:9px;margin-left:8px;background:transparent;color:var(--dim);border:1px solid var(--line)}
+  .tile .t-val.sm{font-size:30px}
+  .d-odo{font-size:15px;font-weight:650;color:var(--muted);margin-top:10px;letter-spacing:.2px}
+  .d-chip.ok b{color:var(--ok)} .d-chip.warn b{color:var(--warn)} .d-chip.alarm b{color:#ff6b6d}
 </style>
 </head>
 <body>
@@ -263,6 +292,35 @@
   <div class="status" id="status"></div>
 
   <section class="tiles" id="tiles"></section>
+
+  <section class="card" id="mtCard">
+    <h2>Mileage &amp; service</h2>
+    <div class="odo-big" id="odoBig">—</div>
+    <div class="odo-src" id="odoSrc"></div>
+    <div id="mtList"></div>
+    <button class="small more" id="mtMore"></button>
+  </section>
+
+  <section class="card" id="fuelCard">
+    <h2>Fuel economy</h2>
+    <div class="row"><span class="k">Right now</span><span class="v" id="fNow">—</span></div>
+    <div class="row"><span class="k">This drive</span><span class="v" id="fDrive">—</span></div>
+    <div class="row"><span class="k">Last tank</span><span class="v" id="fTank">—</span></div>
+    <div class="row"><span class="k">Average, last 5 tanks</span><span class="v" id="fAvg">—</span></div>
+    <div class="row"><span class="k">Fuel cost per mile</span><span class="v" id="fCost">—</span></div>
+    <div class="hint" id="fHint" style="margin:8px 0 0"></div>
+    <div class="btns"><button class="small primary" id="fillBtn">Log fill-up</button></div>
+    <div class="form" id="fillForm" hidden>
+      <div class="f2">
+        <label class="field"><span>Gallons</span><input id="fGal" type="number" inputmode="decimal" step="0.001" min="0"></label>
+        <label class="field"><span>Total $ (optional)</span><input id="fUsd" type="number" inputmode="decimal" step="0.01" min="0"></label>
+      </div>
+      <label class="field"><span>Odometer</span><input id="fOdo" type="number" inputmode="numeric" step="1" min="0"></label>
+      <div class="chk"><span>Filled to full</span><span class="switch on" id="fFull" role="switch"></span></div>
+      <div class="btns"><button class="small primary" id="fSave">Save fill-up</button><button class="small" id="fCancel">Cancel</button></div>
+    </div>
+    <div class="fills" id="fills"></div>
+  </section>
 
   <section class="card">
     <h2>Misfires this drive</h2>
@@ -366,6 +424,7 @@
         <div class="d-lbl">Speed</div>
         <div class="d-speed na" id="dSpeed">—</div>
         <div class="d-unit">mph</div>
+        <div class="d-odo" id="dOdo"></div>
       </div>
       <div class="d-rpm">
         <div class="d-rpm-row"><span class="d-lbl">RPM</span><span class="d-rpm-v na" id="dRpm">—</span></div>
@@ -378,6 +437,7 @@
   <div class="d-bot">
     <div class="d-chip"><span class="dot" id="dCelDot"></span>Check engine<b id="dCel">—</b></div>
     <div class="d-chip">Codes<b id="dCodes">—</b></div>
+    <div class="d-chip" id="dSvc"><span id="dSvcK">Service</span><b id="dSvcV">—</b></div>
     <div class="d-mis"><span class="d-lbl">Misfires</span><div id="dMis"></div></div>
     <div class="d-status" id="dStatus"></div>
   </div>
@@ -561,7 +621,8 @@ class DemoTruck {
     // demo cylinder shutoff (only with window.__demoDfm): steady cruise, last 20 s of every minute — manifold pressure jumps
     const dfm = !!window.__demoDfm && t > 30 && mph > 30 && (t % 60) > 40;
     const map = mph < 1 ? 30 + j(1) : t < 20 ? 55 + j(3) : 35 + j(1.5) + (dfm ? 28 : 0);
-    return { rpm, mph, load, coolC, transC, map, dfm, volts: rpm > 400 ? 14.25 + j(.08) : 12.6, stft1: 2 + leak + j(3), ltft1: 4, stft2: 1 + j(3), ltft2: 5, iat: 24, timing: 18 + j(6), o2r1: 0.68 + j(.05), o2r2: 0.7 + j(.05) };
+    const maf = rpm / 60 * 2.65 * 1.18 * (load / 100) * (1 + j(.04));   // g/s: half the 5.3 L per rev × air density × load
+    return { rpm, mph, load, maf, coolC, transC, map, dfm, volts: rpm > 400 ? 14.25 + j(.08) : 12.6, stft1: 2 + leak + j(3), ltft1: 4, stft2: 1 + j(3), ltft2: 5, iat: 24, timing: 18 + j(6), o2r1: 0.68 + j(.05), o2r2: 0.7 + j(.05) };
   }
   hex(b) { return b.map(x => x.toString(16).toUpperCase().padStart(2, '0')).join(this.spaces ? ' ' : ''); }
   frames(b) {
@@ -624,7 +685,9 @@ class DemoTruck {
     if (m === '01') {
       const w = x => [(x >> 8) & 255, x & 255], tr = x => Math.round(x * 128 / 100 + 128);
       const map = {
-        0x00: [0xBF, 0xBF, 0xA8, 0x93], 0x20: [0x80, 0x00, 0x00, 0x01], 0x40: [0x40, 0x00, 0x00, 0x00],
+        0x00: [0xBF, 0xBF, 0xA8, 0x93], 0x20: [0x80, 0x00, 0x00, 0x01], 0x40: [0x50, 0x00, 0x00, 0x00],
+        0x10: w(Math.round(v.maf * 100)), 0x44: w(32768),
+        0xA6: (() => { const km10 = 1260450 + Math.round(Math.max(0, t - 14) * 48 / 3600 * 1.609344 * 10); return [(km10 >>> 24) & 255, (km10 >> 16) & 255, (km10 >> 8) & 255, km10 & 255]; })(),
         0x01: [0x00, 0x07, 0xE5, 0x04], 0x13: [0x33], 0x15: [Math.round(v.o2r1 * 200), 0xFF], 0x19: [Math.round(v.o2r2 * 200), 0xFF], 0x30: [84], 0x31: w(1996), 0x04: [Math.round(v.load * 2.55)], 0x05: [Math.round(v.coolC + 40)],
         0x06: [tr(v.stft1)], 0x07: [tr(v.ltft1)], 0x08: [tr(v.stft2)], 0x09: [tr(v.ltft2)],
         0x0C: w(Math.round(v.rpm * 4)), 0x0D: [Math.round(v.mph / 0.621371)], 0x0E: [Math.round((v.timing + 64) * 2)],
@@ -732,6 +795,7 @@ async function readFast() {
   b = await q01('05'); if (b) d.coolantF = cToF(b[0] - 40);
   b = await q01('04'); if (b) d.load = b[0] * 100 / 255;
   if (has(0x0B)) { b = await q01('0B'); if (b) d.map = b[0]; }          // manifold pressure, kPa — jumps when cylinders shut off
+  if (has(0x10)) { b = await q01('10'); if (b && b.length >= 2) d.maf = ((b[0] << 8) | b[1]) / 100; }   // airflow g/s — fuel economy comes from this
   const okV = x => x >= 6 && x <= 20;                                   // the computer reports 0 V while it powers down
   const engineOff = d.rpm != null && d.rpm < 100;
   if (!engineOff && has(0x42) && (S.fails.v42 || 0) < 3) { b = await q01('42'); const x = b ? ((b[0] << 8) | b[1]) / 1000 : null; if (x != null && okV(x)) { d.volts = x; S.fails.v42 = 0; } else S.fails.v42 = (S.fails.v42 || 0) + 1; }
@@ -748,6 +812,7 @@ async function readTrims() {
   if (has(0x15)) { b = await q01('15'); d.o2r1 = b && b[0] > 0 ? b[0] / 200 : null; }   // rear (after-converter) O2, driver side
   if (has(0x19)) { b = await q01('19'); d.o2r2 = b && b[0] > 0 ? b[0] / 200 : null; }   // rear O2, passenger side
   if (S.leakTest) return;                                                               // keep the test fast
+  if (has(0x44)) { b = await q01('44'); if (b && b.length >= 2) d.lambda = ((b[0] << 8) | b[1]) / 32768; }   // commanded air-fuel ratio (1.00 = normal)
   b = await q01('0F'); if (b && b[0] > 0) d.iatF = cToF(b[0] - 40);
   b = await q01('0E'); if (b) d.timing = b[0] / 2 - 64;
 }
@@ -761,6 +826,19 @@ async function readTrans() {
   }
   if (!got && ++S.transFails >= 3 && !S.transSrc) S.transSrc = false;
   await setHeader(ECM);
+}
+async function readOdo() {                      // odometer (standard value A6, 0.1 km); this truck answered it in the 11/24 scan
+  if (S.odoOk === false) return;
+  const b = await q01('A6');
+  if (b && b.length >= 4) {
+    const km10 = ((b[0] << 24) >>> 0) + (b[1] << 16) + (b[2] << 8) + b[3];
+    const miles = km10 / 10 * 0.621371;
+    if (miles > 100 && miles < 1e6) { S.data.odo = miles; S.odoAdd = 0; S.odoOk = true; S.odoFails = 0; return; }
+  }
+  if (++S.odoFails >= 3 && !S.odoOk) {           // not shared: carry on from the last known number plus distance driven
+    S.odoOk = false;
+    if (S.data.odo == null && S.odoStore) { S.data.odo = S.odoStore.mi; S.odoAdd = 0; }
+  }
 }
 async function readCyl(i) {                     // one candidate per pass; gives up on a value only if it has never answered
   const did = CYL_DIDS[i % CYL_DIDS.length], G = S.gm;
@@ -1427,15 +1505,16 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 /* ============================== log ============================== */
 const COLS = ['time', 'rpm', 'mph', 'coolant_F', 'trans_F', 'volts', 'load_pct', 'stft1', 'ltft1', 'stft2', 'ltft2', 'trim_driver', 'trim_pass', 'iat_F', 'timing_deg',
   'mis1', 'mis2', 'mis3', 'mis4', 'mis5', 'mis6', 'mis7', 'mis8', 'mil', 'codes', 'alerts',
-  'map_kPa', ...CYL_DIDS.map(d => 'gm' + d)];                 // new columns go on the end so older column positions don't move
-const C_MAP = COLS.indexOf('map_kPa');
+  'map_kPa', ...CYL_DIDS.map(d => 'gm' + d), 'odo_mi', 'maf_gs', 'lambda'];   // new columns go on the end so older column positions don't move
+const C_MAP = COLS.indexOf('map_kPa'), C_ODO = COLS.indexOf('odo_mi'), C_MAF = COLS.indexOf('maf_gs'), C_LAM = COLS.indexOf('lambda');
 function logRow(now) {
   const d = S.data, M = S.mis, f1 = x => x == null ? '' : Math.round(x * 10) / 10;
   S.log.push([new Date(now).toISOString(), f1(d.rpm), f1(d.mph), f1(d.coolantF), f1(d.transF), d.volts == null ? '' : Math.round(d.volts * 100) / 100, f1(d.load),
     f1(d.stft1), f1(d.ltft1), f1(d.stft2), f1(d.ltft2), f1(d.trim1), f1(d.trim2), f1(d.iatF), f1(d.timing),
     ...M.cur.map((c, i) => c == null ? '' : c - M.base[i]), S.codes.mil == null ? '' : (S.codes.mil ? 1 : 0),
     [...S.codes.stored, ...S.codes.pending.map(c => c + '(p)')].join(' '), Object.keys(S.alerts).join(' '),
-    d.map == null ? '' : d.map, ...CYL_DIDS.map(k => S.gm.val[k] || '')]);
+    d.map == null ? '' : d.map, ...CYL_DIDS.map(k => S.gm.val[k] || ''),
+    d.odo == null ? '' : Math.round((d.odo + (S.odoAdd || 0)) * 10) / 10, d.maf == null ? '' : Math.round(d.maf * 100) / 100, d.lambda == null ? '' : Math.round(d.lambda * 1000) / 1000]);
   if (S.log.length > 12000) S.log.splice(0, S.log.length - 12000);
   if (!S.logMeta) S.logMeta = { start: now, reader: S.elm ? S.elm.name : '', demo: S.demo };
   if (S.log.length % 20 === 0) saveLog();
@@ -1523,6 +1602,7 @@ function summary(rows, opts) {
     pre + line('Coolant °F (running)', 3, run), pre + line('Trans °F', 4), pre + line('Volts (running)', 5, run),
     pre + line('Fuel trim driver % (warm)', 11, warm, true), pre + line('Fuel trim passenger % (warm)', 12, warm, true),
     pre + line('RPM', 1), pre + line('Speed mph', 2), pre + line('Load %', 6), pre + line('Timing °', 14),
+    pre + odoFuelLine(rows),
     `${pre}Misfires this drive, cyl 1–8: ${mis}`,
     `${pre}Misfires once warm (160°F+), cyl 1–8: ${warmMisfires(rows).join(' ')}`,
     `${pre}10-drive misfire average, cyl 1–8: ${((opts.ewma && opts.ewma.some(x => x != null)) ? opts.ewma : S.mis.ewma).map(x => x == null ? '-' : x).join(' ')}`,
@@ -1596,6 +1676,7 @@ function finishDrive(reason) {
   if (rows.length > 4000) { const k = Math.ceil(rows.length / 4000); rows = rows.filter((r, i) => i % k === 0 || r[25]); }
   S.queue.push({ path: `drives/${stamp}.md`, text: md + '\n' }, { path: `drives/${stamp}.csv`, text: csv(rows) + '\n' });
   saveQueue(); flushQueue();
+  odoSave(true); fuelSave(); syncSoon(true);
 }
 function checkStaleDrive() {
   if (S.drive && !S.running && Date.now() - (S.drive.last || S.drive.start) > 5 * 60000) finishDrive('app was closed');
@@ -1623,9 +1704,329 @@ async function testCloud() {
     const j = await r.json();
     if (!j.permissions || !j.permissions.push) throw new Error('The key can read but not save. Set Contents to "Read and write".');
     S.cloudMsg = { cls: 'ok', text: `Connected to ${j.full_name}${j.private ? ' (private)' : ' — careful, this folder is PUBLIC'} ✓` };
-    renderCloud(); flushQueue();
+    renderCloud(); flushQueue(); syncLoad().then(() => syncSoon(true)).catch(() => {});
   } catch (e) { S.cloudMsg = { cls: 'err', text: navigator.onLine === false ? 'No signal — try again with service.' : e.message }; renderCloud(); }
 }
+
+/* ============================== odometer ============================== */
+const fmt = n => n == null || isNaN(n) ? '—' : Math.round(n).toLocaleString('en-US');
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+const setTxt = (sel, t) => { const el = $(sel); if (el && el.textContent !== t) el.textContent = t; };
+const DAY = 864e5, MON = 30.44 * DAY;
+const BUILT = new Date(2018, 10, 26, 12).getTime();             // build date, from the 11/24/2026 scan
+// Last known before this version: 78,304 mi in the 11/24 scan + about 16 mi of logged driving on 11/25.
+S.odoStore = store.get('th_odo', { mi: 78320, at: Date.parse('2026-11-25T21:17:00Z'), src: 'drive log' });
+S.odoAdd = 0; S.odoOk = null; S.odoFails = 0;
+const odoReal = () => S.running && !S.demo && S.data.odo != null;
+function odoNow() { return odoReal() ? S.data.odo + S.odoAdd : (S.odoStore ? S.odoStore.mi : null); }   // never demo numbers
+function odoLive() { return S.running && S.data.odo != null ? S.data.odo + S.odoAdd : odoNow(); }       // what the screens show
+let odoSavedAt = 0;
+function odoSave(force) {
+  if (!odoReal()) return;
+  const now = Date.now(); if (!force && now - odoSavedAt < 15000) return; odoSavedAt = now;
+  S.odoStore = { mi: Math.round(odoNow() * 10) / 10, at: now, src: S.odoOk ? 'truck' : 'estimated' };
+  store.set('th_odo', S.odoStore);
+}
+const dateStr = t => { const d = new Date(t), y = d.getFullYear() !== new Date().getFullYear(); return d.toLocaleDateString('en-US', y ? { month: 'short', day: 'numeric', year: 'numeric' } : { month: 'short', day: 'numeric' }); };
+const whenStr = t => { const d = new Date(t), today = new Date().toDateString() === d.toDateString(); return (today ? 'today' : dateStr(t)) + ', ' + d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }); };
+const dateOut = t => { const d = new Date(t), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; };
+const dateIn = s => { const a = String(s).split('-').map(Number); return a.length === 3 && a[0] > 1990 ? new Date(a[0], a[1] - 1, a[2], 12).getTime() : null; };
+function durStr(ms) {
+  const d = ms / DAY; if (d < 14) { const n = Math.max(1, Math.round(d)); return n + (n === 1 ? ' day' : ' days'); }
+  if (d < 60) return Math.round(d / 7) + ' wks';
+  const m = d / 30.44; return m < 24 ? Math.round(m) + ' mo' : Math.round(m / 12 * 10) / 10 + ' yrs';
+}
+function armConfirm(b, txt) { if (!b._txt) b._txt = b.textContent; b.classList.add('confirm'); b.textContent = txt; clearTimeout(b._t); b._t = setTimeout(() => disarm(b), 3500); }
+function disarm(b) { clearTimeout(b._t); b.classList.remove('confirm'); if (b._txt) b.textContent = b._txt; }
+
+/* ============================== maintenance ============================== */
+// GM's 2019 Silverado 1500 schedule, with the severe-use numbers (towing, dirt roads). Every number can be changed in the app.
+const MT_DEF = [
+  { id: 'oil', name: 'Oil & filter', short: 'Oil', every: 5000, months: 12, main: true, note: '0W-20 dexos1 · 8 qt · Wix XP WL10255XP' },
+  { id: 'trans', name: 'Transmission fluid & filter', short: 'Trans fluid', every: 45000, months: null, main: true, note: 'Mobil 1 LV ATF HP', seed: { mi: 65000, at: null, src: 'dealer' } },
+  { id: 'rotate', name: 'Tire rotation', short: 'Rotation', every: 7500, months: null, main: true, note: '' },
+  { id: 'airf', name: 'Engine air filter', short: 'Air filter', every: 22500, months: 24, main: true, note: 'ACDelco A3246C' },
+  { id: 'cabin', name: 'Cabin air filter', short: 'Cabin filter', every: 22500, months: 24, note: '' },
+  { id: 'tcase', name: 'Transfer case fluid', short: 'Transfer case', every: 45000, months: null, note: '', seed: 'factory' },
+  { id: 'diffs', name: 'Front & rear diff fluid', short: 'Diff fluid', every: 45000, months: null, note: '', seed: 'factory' },
+  { id: 'plugs', name: 'Spark plugs', short: 'Plugs', every: 97500, months: null, note: '', seed: 'factory' },
+  { id: 'coolant', name: 'Coolant (DEX-COOL)', short: 'Coolant', every: 150000, months: 60, note: '', seed: 'factory' },
+  { id: 'brake', name: 'Brake fluid', short: 'Brake fluid', every: null, months: 60, note: '', seed: 'factory' },
+];
+function mtDefaults() {
+  const items = {};
+  for (const d of MT_DEF) {
+    const s = d.seed === 'factory' ? { mi: 0, at: BUILT, src: 'factory' } : (d.seed || { mi: null, at: null, src: '' });
+    items[d.id] = { mi: s.mi, at: s.at, src: s.src, every: d.every, months: d.months, u: 0, hist: [] };
+  }
+  return { items };
+}
+S.mt = (() => { const m = store.get('th_maint', null), def = mtDefaults(); if (!m || !m.items) return def; for (const k in def.items) if (!m.items[k]) m.items[k] = def.items[k]; return m; })();
+S.mtAll = false; S.mtChip = null;
+function mtSave() { store.set('th_maint', S.mt); }
+function mtSet(id, patch) {
+  const r = S.mt.items[id];
+  if (r.mi != null || r.at != null) r.hist = (r.hist || []).concat([{ mi: r.mi, at: r.at, src: r.src }]).slice(-10);
+  Object.assign(r, patch, { u: Date.now() });
+  mtSave(); mtRender(true); syncSoon(true);
+}
+function mtStatus(r, odo, now) {
+  const hasMi = !!r.every && r.mi != null && odo != null, hasT = !!r.months && r.at != null;
+  if (!hasMi && !hasT) return { lv: 'na', left: r.mi == null && r.at == null ? 'Not set' : '—', short: 'not set', frac: 0, rank: -1 };
+  let fm = -1, ft = -1, lm = 0, lt = 0;
+  if (hasMi) { lm = r.every - (odo - r.mi); fm = (odo - r.mi) / r.every; }
+  if (hasT) { lt = r.at + r.months * MON - now; ft = (now - r.at) / (r.months * MON); }
+  const byMi = fm >= ft, frac = Math.max(fm, ft);
+  const left = byMi ? (lm > 0 ? fmt(lm) + ' mi left' : lm > -50 ? 'Due now' : 'Due · ' + fmt(-lm) + ' mi over')
+                    : (lt > 0 ? 'Due in ' + durStr(lt) : lt > -3 * DAY ? 'Due now' : 'Due · ' + durStr(-lt) + ' over');
+  const short = byMi ? (lm > 0 ? fmt(lm) + ' mi' : 'due') : (lt > 0 ? durStr(lt) : 'due');
+  return { lv: frac >= 1 ? 'alarm' : frac >= 0.85 ? 'warn' : 'ok', left, short, frac, rank: frac };
+}
+function mtSub(d, r) {
+  const last = r.mi == null && r.at == null ? 'Never logged' :
+    'Last: ' + [r.mi != null && (r.every || r.src !== 'factory') ? (r.src === 'dealer' ? '~' : '') + fmt(r.mi) + ' mi' : null, r.at != null ? dateStr(r.at) : null].filter(Boolean).join(', ') +
+    (r.src === 'factory' ? ' (factory, assumed)' : r.src === 'dealer' ? ' (dealer flush)' : '');
+  const every = 'every ' + [r.every ? fmt(r.every) + ' mi' : null, r.months ? r.months + ' mo' : null].filter(Boolean).join(' or ');
+  return esc(last + ' · ' + every) + (d.note ? '<br>' + esc(d.note) : '');
+}
+function buildMaint() {
+  $('#mtList').innerHTML = MT_DEF.map(d => `<div class="mt na" id="mt_${d.id}">
+    <div class="mt-top"><span class="mt-name">${esc(d.name)}</span><span class="mt-left">—</span></div>
+    <div class="mt-bar"><i></i></div>
+    <div class="mt-sub"></div>
+    <div class="mt-btns"><button class="small" data-act="done" data-id="${d.id}">Done today</button><button class="small" data-act="edit" data-id="${d.id}">Edit</button></div>
+    <div class="form" data-form="${d.id}" hidden>
+      <div class="f2"><label class="field"><span>Last done at (mi)</span><input data-f="mi" type="number" inputmode="numeric" min="0"></label>
+        <label class="field"><span>On (date)</span><input data-f="at" type="date"></label></div>
+      <div class="f2"><label class="field"><span>Every (mi)</span><input data-f="every" type="number" inputmode="numeric" min="0"></label>
+        <label class="field"><span>Or every (months)</span><input data-f="months" type="number" inputmode="numeric" min="0"></label></div>
+      <div class="btns"><button class="small primary" data-act="save" data-id="${d.id}">Save</button><button class="small" data-act="cancel" data-id="${d.id}">Cancel</button></div>
+    </div></div>`).join('');
+}
+const mtCache = {}; let mtRT = 0;
+function mtRender(force) {
+  const now = Date.now(); if (!force && now - mtRT < 2000) return; mtRT = now;
+  const odo = odoNow(); let hidden = 0, chip = null, oil = null;
+  for (const d of MT_DEF) {
+    const r = S.mt.items[d.id], st = mtStatus(r, odo, now), el = $('#mt_' + d.id);
+    const cls = 'mt ' + st.lv; if (el.className !== cls) el.className = cls;
+    const lf = el.querySelector('.mt-left'); if (lf.textContent !== st.left) lf.textContent = st.left;
+    el.querySelector('.mt-bar i').style.width = Math.min(100, Math.max(0, st.frac * 100)) + '%';
+    const sub = mtSub(d, r); if (mtCache[d.id] !== sub) { mtCache[d.id] = sub; el.querySelector('.mt-sub').innerHTML = sub; }
+    const show = S.mtAll || d.main || st.lv === 'warn' || st.lv === 'alarm' || !el.querySelector('.form').hidden;
+    el.hidden = !show; if (!show) hidden++;
+    if (d.id === 'oil') oil = { d, st };
+    // dash chip: oil, unless something you've logged is due soon (assumed-factory items stay on this card only)
+    if (r.src !== 'factory' && (st.lv === 'warn' || st.lv === 'alarm') && (!chip || st.rank > chip.st.rank)) chip = { d, st };
+  }
+  S.mtChip = chip || oil;
+  const more = $('#mtMore'); more.hidden = !S.mtAll && !hidden; more.textContent = S.mtAll ? 'Show less' : `Show ${hidden} more`;
+  const o = odoLive();
+  $('#odoBig').innerHTML = o == null ? '—' : fmt(o) + '<span class="u">mi</span>';
+  setTxt('#odoSrc', S.running && S.data.odo != null ? (S.demo ? 'Demo truck' : S.odoOk ? 'Live from the truck' : 'Estimated from speed — the truck isn\'t sharing its odometer')
+    : S.odoStore ? 'Last read ' + whenStr(S.odoStore.at) : 'Connect to read it');
+}
+function openMtEdit(id) {
+  const r = S.mt.items[id], form = $('#mt_' + id + ' .form'), o = odoNow();
+  const set = (k, v) => { form.querySelector('[data-f="' + k + '"]').value = v == null ? '' : v; };
+  set('mi', r.mi != null ? Math.round(r.mi) : (o != null ? Math.round(o) : null)); set('at', dateOut(r.at != null ? r.at : Date.now()));
+  set('every', r.every); set('months', r.months);
+  form.hidden = false; mtRender(true);
+}
+$('#mtList').onclick = e => {
+  const b = e.target.closest('button'); if (!b || !b.dataset.act) return;
+  const id = b.dataset.id, d = MT_DEF.find(x => x.id === id), form = $('#mt_' + id + ' .form'), act = b.dataset.act;
+  if (act === 'done') {
+    if (!b.classList.contains('confirm')) { armConfirm(b, 'Tap again to reset'); return; }
+    disarm(b);
+    const o = odoNow(); if (o == null) { openMtEdit(id); toast('Enter the mileage it was done at'); return; }
+    form.hidden = true; mtSet(id, { mi: Math.round(o), at: Date.now(), src: 'done' }); toast(d.name + ' reset at ' + fmt(o) + ' mi');
+  } else if (act === 'edit') { if (form.hidden) openMtEdit(id); else { form.hidden = true; mtRender(true); } }
+  else if (act === 'cancel') { form.hidden = true; mtRender(true); }
+  else if (act === 'save') {
+    const f = k => form.querySelector('[data-f="' + k + '"]').value.trim(), num = k => f(k) === '' ? null : +f(k);
+    const mi = num('mi'), every = num('every'), months = num('months'), at = f('at') ? dateIn(f('at')) : null;
+    if (mi != null && (isNaN(mi) || mi < 0 || mi > 1e6)) { toast('Check the mileage'); return; }
+    if ((every == null || isNaN(every) || every <= 0) && (months == null || isNaN(months) || months <= 0)) { toast('Set miles or months'); return; }
+    form.hidden = true;
+    mtSet(id, { mi, at, every: every > 0 ? every : null, months: months > 0 ? months : null, src: 'manual' }); toast(d.name + ' saved');
+  }
+};
+$('#mtMore').onclick = () => { S.mtAll = !S.mtAll; mtRender(true); };
+
+/* ============================== fuel economy ============================== */
+// Fuel burned = airflow ÷ (air-fuel ratio × weight of a gallon). E10 pump gas: 14.1 to 1, about 2,790 g a gallon.
+// After full fill-ups the estimate is tuned to the real pump gallons (S.fuel.cal).
+const AFR = 14.1, G_GAL = 2790;
+S.fuel = store.get('th_fuel', null) || { fills: [], since: { gal: 0, mi: 0, u: 0 }, cal: [], calU: 0 };
+S.trip = { gal: 0, mi: 0 }; S.mpgNow = null; S.fuelT = null;
+function gph(maf, lam) { if (maf == null || isNaN(maf)) return null; const l = lam > 0.6 && lam < 2.1 ? lam : 1; return maf * 3600 / (AFR * l * G_GAL); }
+function fuelCal() { const c = S.fuel.cal; if (!c || !c.length) return 1; let s = 0; for (const x of c) s += x; return s / c.length; }
+const mpgFmt = v => v == null ? '—' : v >= 50 ? '50+' : v.toFixed(1);
+let fuelSavedAt = 0;
+function fuelSave(throttle) { const now = Date.now(); if (throttle && now - fuelSavedAt < 15000) return; fuelSavedAt = now; store.set('th_fuel', S.fuel); }
+function trackFuel(now) {
+  const d = S.data, last = S.fuelT; S.fuelT = now;
+  if (!last) return;
+  const dt = (now - last) / 1000; if (dt <= 0 || dt > 6) return;          // skip gaps (reader dropped, scan running)
+  const mph = d.mph || 0, mi = mph * dt / 3600;
+  S.odoAdd += mi;                                                        // odometer between reads
+  const raw = gph(d.maf, d.lambda); if (raw == null) return;
+  const g = raw * fuelCal();
+  S.trip.gal += g * dt / 3600; S.trip.mi += mi; d.gph = g;
+  const inst = mph >= 3 && g > 0.02 ? mph / g : null;
+  if (mph < 1) S.mpgNow = null;
+  else if (inst != null) S.mpgNow = S.mpgNow == null ? inst : S.mpgNow + (inst - S.mpgNow) * Math.min(1, dt / 4);
+  d.mpgDrive = S.trip.mi >= 0.3 && S.trip.gal > 0 ? S.trip.mi / S.trip.gal : null;
+  d.mpg = d.mpgDrive != null ? d.mpgDrive : S.mpgNow;
+  if (!S.demo) { const s = S.fuel.since; s.gal += raw * dt / 3600; s.mi += mi; s.u = now; fuelSave(true); }
+}
+const liveFills = () => S.fuel.fills.filter(f => !f.del).sort((a, b) => a.odo - b.odo || a.at - b.at);
+function tanks() {                // each full fill-up: miles since the last full ÷ gallons pumped since then
+  const by = {}, list = []; let prev = null, gal = 0;
+  for (const f of liveFills()) {
+    if (!prev) { if (f.full) prev = f; continue; }
+    gal += f.gal;
+    if (f.full) { const mi = f.odo - prev.odo; if (mi > 5 && gal > 0.5) { const t = { id: f.id, mpg: mi / gal, mi, gal }; by[f.id] = t; list.push(t); } prev = f; gal = 0; }
+  }
+  return { by, list };
+}
+function logFill(gal, usd, odo, full) {
+  const now = Date.now(), fills = liveFills(), prevFull = fills.filter(f => f.full).pop();
+  if (full && prevFull && odo > prevFull.odo) {    // tune live MPG when the app saw most of the miles on this tank
+    const odoMi = odo - prevFull.odo, pumped = fills.slice(fills.indexOf(prevFull) + 1).reduce((s, x) => s + x.gal, 0) + gal, s = S.fuel.since;
+    if (s.mi >= 0.8 * odoMi && s.mi <= 1.1 * odoMi && s.gal > 1) {
+      const k = Math.min(1.6, Math.max(0.6, pumped * Math.min(1, s.mi / odoMi) / s.gal));
+      S.fuel.cal = (S.fuel.cal || []).concat([Math.round(k * 1000) / 1000]).slice(-3); S.fuel.calU = now;
+    }
+  }
+  const f = { id: now, at: now, gal, usd, odo, full, u: now };
+  S.fuel.fills.push(f);
+  if (full) S.fuel.since = { gal: 0, mi: 0, u: now };
+  if (!odoReal() && (!S.odoStore || odo > S.odoStore.mi)) { S.odoStore = { mi: odo, at: now, src: 'fill-up' }; store.set('th_odo', S.odoStore); }
+  fuelSave(); renderFills(); mtRender(true); syncSoon(true);
+  return tanks().by[f.id];
+}
+function renderFills() {
+  const T = tanks().by, fl = liveFills().slice(-6).reverse();   // $/gal shows in the cost row
+  $('#fills').innerHTML = fl.map(f => {
+    const t = T[f.id];
+    return `<div class="fl"><span>${dateStr(f.at)} · ${fmt(f.odo)} mi</span><span>${f.gal.toFixed(1)} gal${t ? ' · <b>' + t.mpg.toFixed(1) + ' mpg</b>' : f.full ? '' : ' · partial'}<button class="x" data-del="${f.id}">✕</button></span></div>`;
+  }).join('');
+  renderFuel();
+}
+function renderFuel() {
+  const d = S.data, T = tanks().list, last = T[T.length - 1], five = T.slice(-5);
+  const avg = five.length ? five.reduce((s, t) => s + t.mi, 0) / five.reduce((s, t) => s + t.gal, 0) : null;
+  setTxt('#fNow', !S.running ? '—' : d.maf == null ? 'no airflow data yet' : (d.mph || 0) < 1 ? (d.gph != null ? 'Idling · ' + d.gph.toFixed(2) + ' gal/hr' : '—') : mpgFmt(S.mpgNow) + ' mpg');
+  setTxt('#fDrive', S.trip.mi < 0.1 ? '—' : `${mpgFmt(S.trip.gal > 0 ? S.trip.mi / S.trip.gal : null)} mpg · ${S.trip.mi.toFixed(1)} mi · ${S.trip.gal.toFixed(2)} gal`);
+  setTxt('#fTank', last ? last.mpg.toFixed(1) + ' mpg' : '—');
+  setTxt('#fAvg', avg ? avg.toFixed(1) + ' mpg' : '—');
+  const pf = liveFills().filter(f => f.usd && f.gal).pop(), ppg = pf ? pf.usd / pf.gal : null, ref = avg || (last && last.mpg) || d.mpgDrive;
+  setTxt('#fCost', ppg && ref ? '$' + (ppg / ref).toFixed(2) + ' a mile' : '—');
+  const nf = liveFills().length;
+  setTxt('#fHint', S.fuel.cal && S.fuel.cal.length ? 'Live MPG is tuned to your fill-ups.' : nf ? 'Fill to full each time. Live MPG gets tuned at your next full fill-up.' : 'Log each fill-up, filled to full. Real MPG shows from the second one.');
+}
+function fuelFromRows(rows) {     // for drive summaries: same math, from the saved rows
+  let gal = 0, mi = 0, prev = null, n = 0;
+  for (const r of rows) {
+    const t = Date.parse(r[0]);
+    if (prev != null) {
+      const dt = (t - prev) / 1000;
+      if (dt > 0 && dt <= 6) { mi += (+r[2] || 0) * dt / 3600; const m = r[C_MAF]; if (m !== '' && m != null) { const g = gph(+m, +r[C_LAM]); if (g != null) { gal += g * dt / 3600; n++; } } }
+    }
+    prev = t;
+  }
+  const o = rows.map(r => r[C_ODO]).filter(v => v !== '' && v != null).map(Number);
+  return { gal: gal * fuelCal(), mi, n, o0: o.length ? o[0] : null, o1: o.length ? o[o.length - 1] : null };
+}
+function odoFuelLine(rows) {
+  const f = fuelFromRows(rows), parts = [];
+  if (f.o0 != null) parts.push(`Odometer ${fmt(f.o0)} → ${fmt(f.o1)} mi (${(f.o1 - f.o0).toFixed(1)} mi)`);
+  const mi = f.o0 != null && f.o1 - f.o0 > 0.2 ? f.o1 - f.o0 : f.mi;
+  parts.push(f.n ? `Fuel ${f.gal.toFixed(2)} gal · ${f.gal > 0.05 && mi > 0.3 ? (mi / f.gal).toFixed(1) + ' mpg' : 'mpg n/a'} (from airflow${S.fuel.cal && S.fuel.cal.length ? ', tuned to fill-ups' : ''})` : 'Fuel: no airflow data');
+  return parts.join(' · ');
+}
+$('#fillBtn').onclick = () => {
+  const f = $('#fillForm'); if (!f.hidden) { f.hidden = true; return; }
+  $('#fGal').value = ''; $('#fUsd').value = ''; const o = odoNow(); $('#fOdo').value = o == null ? '' : Math.round(o);
+  setSwitch('#fFull', true); f.hidden = false; syncLoad().catch(() => {});
+};
+$('#fFull').onclick = () => setSwitch('#fFull', !$('#fFull').classList.contains('on'));
+$('#fCancel').onclick = () => { $('#fillForm').hidden = true; };
+$('#fSave').onclick = () => {
+  const gal = parseFloat($('#fGal').value), usd = parseFloat($('#fUsd').value), odo = parseFloat($('#fOdo').value), full = $('#fFull').classList.contains('on');
+  if (!(gal > 0.5 && gal < 40)) { toast('Enter the gallons'); return; }
+  if (!(odo > 0)) { toast('Enter the odometer'); return; }
+  const prev = liveFills().pop(); if (prev && odo < prev.odo) { toast('That\'s below your last fill-up (' + fmt(prev.odo) + ' mi)'); return; }
+  const t = logFill(Math.round(gal * 1000) / 1000, usd > 0 ? Math.round(usd * 100) / 100 : null, Math.round(odo), full);
+  $('#fillForm').hidden = true; toast(t ? 'Saved · ' + t.mpg.toFixed(1) + ' mpg this tank' : 'Fill-up saved');
+};
+$('#fills').onclick = e => {
+  const b = e.target.closest('button[data-del]'); if (!b) return;
+  if (!b.classList.contains('confirm')) { armConfirm(b, 'Delete?'); return; }
+  const f = S.fuel.fills.find(x => String(x.id) === b.dataset.del);
+  if (f) { f.del = true; f.u = Date.now(); fuelSave(); renderFills(); syncSoon(true); toast('Fill-up deleted'); }
+};
+
+/* ---------- sync: truck-logs/maintenance.json, so the iPhone, the iPad and Claude see the same numbers ---------- */
+const SYNC_PATH = 'maintenance.json';
+let syncT = null, syncBusy = false, syncDirty = false;
+function syncSoon(quick) { syncDirty = true; if (!S.cfg.token) return; clearTimeout(syncT); syncT = setTimeout(syncSave, quick ? 1500 : 4000); }
+function syncDoc() {
+  const odo = odoNow(), now = Date.now();
+  const status = MT_DEF.map(d => { const r = S.mt.items[d.id], st = mtStatus(r, odo, now);
+    return { item: d.name, last_mi: r.mi, last_date: r.at ? dateOut(r.at) : null, source: r.src || null, every_mi: r.every, every_months: r.months, status: st.left }; });
+  const T = tanks().list;
+  return { v: 1, saved: new Date(now).toISOString(), about: 'Written by the Silverado Health app. Miles; times are ms since 1970.',
+    odometer: S.odoStore, status, tanks: T.slice(-10), maintenance: S.mt, fuel: S.fuel };
+}
+async function syncSave() {
+  if (!S.cfg.token || !syncDirty) return;
+  if (syncBusy) { clearTimeout(syncT); syncT = setTimeout(syncSave, 3000); return; }
+  syncBusy = true;
+  try { await syncLoad(); await ghPut(SYNC_PATH, JSON.stringify(syncDoc(), null, 1) + '\n'); syncDirty = false; }
+  catch (e) { clearTimeout(syncT); syncT = setTimeout(syncSave, 60000); }
+  syncBusy = false;
+}
+async function syncLoad() {
+  if (!S.cfg.token) return false;
+  const r = await fetch(ghUrl('/contents/' + SYNC_PATH), { headers: ghHeaders(), cache: 'no-store' });
+  if (r.status === 404) { syncDirty = true; return false; }
+  if (!r.ok) throw new Error('GitHub said ' + r.status);
+  const j = await r.json(), bin = atob((j.content || '').replace(/\s/g, ''));
+  const by = new Uint8Array(bin.length); for (let i = 0; i < bin.length; i++) by[i] = bin.charCodeAt(i);
+  return mergeRemote(JSON.parse(new TextDecoder().decode(by)));
+}
+function mergeRemote(R) {         // newest edit wins, item by item; fill-ups are combined
+  if (!R || R.v !== 1) return false;
+  let changed = false, mine = false;
+  const ro = R.odometer, lo = S.odoStore;
+  if (ro && ro.mi != null) { if ((!lo || (ro.at || 0) > (lo.at || 0)) && !odoReal()) { S.odoStore = ro; store.set('th_odo', ro); changed = true; } else if (lo && (lo.at || 0) > (ro.at || 0)) mine = true; }
+  const rm = R.maintenance && R.maintenance.items;
+  if (rm) for (const k in S.mt.items) {
+    const a = S.mt.items[k], b = rm[k];
+    if (!b) { if (a.u) mine = true; continue; }
+    if ((b.u || 0) > (a.u || 0)) { S.mt.items[k] = b; changed = true; } else if ((a.u || 0) > (b.u || 0)) mine = true;
+  }
+  const rf = R.fuel;
+  if (rf) {
+    const mineById = {}, theirs = {};
+    for (const f of S.fuel.fills) mineById[f.id] = f;
+    for (const f of rf.fills || []) { theirs[f.id] = f; const a = mineById[f.id]; if (!a) { S.fuel.fills.push(f); changed = true; } else if ((f.u || 0) > (a.u || 0)) { Object.assign(a, f); changed = true; } }
+    for (const f of S.fuel.fills) { const b = theirs[f.id]; if (!b || (f.u || 0) > (b.u || 0)) mine = true; }
+    const ls = S.fuel.since || { u: 0 }, rs = rf.since || { u: 0 };
+    if ((rs.u || 0) > (ls.u || 0)) { S.fuel.since = rs; changed = true; } else if ((ls.u || 0) > (rs.u || 0)) mine = true;
+    if ((rf.calU || 0) > (S.fuel.calU || 0)) { S.fuel.cal = rf.cal || []; S.fuel.calU = rf.calU; changed = true; } else if ((S.fuel.calU || 0) > (rf.calU || 0)) mine = true;
+  }
+  if (changed) { mtSave(); store.set('th_fuel', S.fuel); renderFills(); mtRender(true); }
+  if (mine) syncDirty = true;
+  return changed;
+}
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') syncLoad().then(() => { if (syncDirty) syncSoon(); }).catch(() => {});
+  else { odoSave(true); fuelSave(); if (syncDirty) syncSave(); }
+});
 
 /* ============================== UI ============================== */
 const TILES = [
@@ -1637,9 +2038,12 @@ const TILES = [
   { k: 'trim2', label: 'Fuel trim · pass.', unit: '%', f: sgn, note: 'ok within ±10' },
   { k: 'mph', label: 'Speed', unit: 'mph', f: r0, note: '' },
   { k: 'load', label: 'Engine load', unit: '%', f: r0, note: '' },
+  { k: 'mpg', label: 'Fuel economy', unit: 'mpg', f: mpgFmt, note: '' },
+  { k: 'odoT', label: 'Odometer', unit: 'mi', f: fmt, note: '' },
 ];
 function buildUI() {
-  $('#tiles').innerHTML = TILES.map(t => `<div class="tile na" id="t_${t.k}"><div class="t-label">${t.label}</div><div class="t-val">—</div><div class="t-note">${t.note}</div></div>`).join('');
+  $('#tiles').innerHTML = TILES.map(t => `<div class="tile na" id="t_${t.k}"><div class="t-label">${t.label}</div><div class="t-val${t.k === 'odoT' ? ' sm' : ''}">—</div><div class="t-note">${t.note}</div></div>`).join('');
+  buildMaint();
   const cyl = n => `<div class="cyl" id="c${n}"><div class="bar"><div class="fill"></div><div class="cnt">–</div></div><div class="lbl">${n}</div><div class="avg"></div></div>`;
   $('#bank1').insertAdjacentHTML('beforeend', [1, 3, 5, 7].map(cyl).join(''));
   $('#bank2').insertAdjacentHTML('beforeend', [2, 4, 6, 8].map(cyl).join(''));
@@ -1656,8 +2060,9 @@ const DASH_TILES = [
   { k: 'volts', label: 'Charging', unit: 'V', f: r1, note: 'running 12.6–14.8' },
   { k: 'trim1', label: 'Fuel trim · driver', unit: '%', f: sgn, note: 'ok within ±10' },
   { k: 'trim2', label: 'Fuel trim · pass.', unit: '%', f: sgn, note: 'ok within ±10' },
-  { k: 'load', label: 'Engine load', unit: '%', f: r0, note: '' },
+  { k: 'mpg', label: 'MPG', unit: '', f: mpgFmt, note: '' },
 ];
+const mpgNote = () => { const d = S.data; return d.mpgDrive != null ? 'drive avg · now ' + mpgFmt(S.mpgNow) : d.mpg != null ? 'right now' : (S.running && d.maf != null ? 'idling' : ''); };
 S.dash = store.get('th_dash', false);
 const clock12 = () => { const d = new Date(); return (d.getHours() % 12 || 12) + ':' + String(d.getMinutes()).padStart(2, '0'); };
 function buildDash() {
@@ -1702,6 +2107,11 @@ function renderDash() {
     el.className = 'd-tile ' + (na ? 'na' : (t.note ? lv : ''));
     el.querySelector('.d-val').innerHTML = na ? '—' : `${t.f(v)}<span class="u">${t.unit}</span>`;
   }
+  setTxt('#d_mpg .d-note', mpgNote());
+  // odometer + next service
+  const o = odoLive(); setTxt('#dOdo', o == null ? '' : fmt(o) + ' mi');
+  const ch = S.mtChip;
+  if (ch) { $('#dSvc').className = 'd-chip ' + (ch.st.lv === 'na' ? '' : ch.st.lv); setTxt('#dSvcK', ch.d.short); setTxt('#dSvcV', ch.st.short); }
   // misfires
   const M = S.mis;
   for (let i = 0; i < 8; i++) {
@@ -1721,12 +2131,14 @@ setInterval(() => { if (S.dash) $('#dClock').textContent = clock12(); }, 10000);
 function render() {
   const d = S.data;
   for (const t of TILES) {
-    const el = $('#t_' + t.k), v = d[t.k], lv = (S.tileLv && S.tileLv[t.k]) || 'ok';
+    const el = $('#t_' + t.k), v = t.k === 'odoT' ? odoLive() : d[t.k], lv = (S.tileLv && S.tileLv[t.k]) || 'ok';
     let na = v == null;
     if (t.k === 'transF' && S.transSrc === false) { el.className = 'tile na'; el.querySelector('.t-val').textContent = 'n/a'; el.querySelector('.t-note').textContent = 'not shared by this truck'; continue; }
     el.className = 'tile ' + (na ? 'na' : (t.note ? lv : ''));
     el.querySelector('.t-val').innerHTML = na ? '—' : `${t.f(v)}<span class="u">${t.unit}</span>`;
   }
+  setTxt('#t_mpg .t-note', mpgNote());
+  setTxt('#t_odoT .t-note', S.running && d.odo != null ? (S.demo ? 'demo' : 'live') : S.odoStore ? 'last read ' + dateStr(S.odoStore.at) : '');
   // misfires
   const M = S.mis, counts = M.cur.map((c, i) => c == null ? null : c - M.base[i]);
   const top = Math.max(10, ...counts.filter(x => x != null));
@@ -1767,7 +2179,7 @@ function render() {
   const pill = $('#pill');
   pill.className = 'pill' + (S.running ? (S.demo ? ' demo' : ' on') : '');
   pill.textContent = S.running ? (S.demo ? 'Demo' : 'Live') : 'Not connected';
-  renderCloud(); renderSmog(); renderLeak(); renderScan(); renderDash();
+  renderCloud(); renderSmog(); renderLeak(); renderScan(); renderFuel(); mtRender(); renderDash();
 }
 
 /* ============================== main loop ============================== */
@@ -1786,9 +2198,10 @@ async function loop() {
       if (!S.leakTest) await readCyl(cycle);
       if (cycle % 30 === 0 || S.smogNow) { S.smogNow = false; await readStatus(); }
       if (cycle % 60 === 2) await readPending();
+      if (cycle % 40 === 3 || (S.odoOk == null && cycle % 4 === 3)) await readOdo();
       const now = Date.now();
       if ((S.lastRx || 0) > before && S.data.rpm != null) { S.lastOk = now; okCycles++; }
-      evaluate(now); trackDrive(now); trackLeak(now); render(); logRow(now);
+      evaluate(now); trackDrive(now); trackLeak(now); trackFuel(now); odoSave(); render(); logRow(now);
       const secs = (now - t0) / 1000; if (secs > 0) S.rate = okCycles / secs;
       status(`${S.demo ? 'Demo truck' : 'Connected to ' + S.elm.name} · ${S.rate.toFixed(1)} updates/sec`);
     } catch (e) {
@@ -1806,6 +2219,8 @@ async function start(demo) {
   S.codes = { mil: null, stored: [], pending: [], checked: 0 };
   S.gm = { val: {}, ok: {}, fails: {} };
   S.smog = null; S.leak = newLeak(); S.leakTest = null; S.leakTestResult = null;
+  S.odoAdd = 0; S.odoOk = null; S.odoFails = 0; S.trip = { gal: 0, mi: 0 }; S.mpgNow = null; S.fuelT = null;
+  if (!demo) syncLoad().catch(() => {});
   if (demo || (S.logMeta && S.logMeta.demo)) { S.log = []; S.logMeta = null; S.history = []; }
   try {
     if (demo) { S.elm = new DemoElm(); }
@@ -1842,6 +2257,7 @@ async function onDrop() {
 }
 function stop() {
   if (S.scan) S.scan.cancel = true;
+  odoSave(true); fuelSave(); if (!S.demo) syncSoon(true);
   S.running = false; if (S.drive) finishDrive('disconnected'); saveLog();
   if (S.elm) S.elm.close();
   try { S.wl && S.wl.release(); } catch (e) {}
@@ -1918,12 +2334,14 @@ $('#leakBtn').onclick = () => { if (S.leakTest) { S.leakTest = null; renderLeak(
 $('#cfgFlush').onclick = () => { S.cloudMsg = null; if (!S.queue.length) { toast('Nothing waiting'); renderCloud(); return; } flushQueue(); };
 $('#cfgRepo').value = S.cfg.repo || 'kaleforall/truck-logs'; $('#cfgToken').value = S.cfg.token || '';
 
-buildUI(); render(); setButtons(); checkStaleDrive(); flushQueue();
+buildUI(); renderFills(); render(); setButtons(); checkStaleDrive(); flushQueue();
+if (S.cfg.token) syncLoad().then(() => { if (syncDirty) syncSoon(); }).catch(() => {});
 if (!navigator.bluetooth) status('Open this page in the free Bluefy app to connect. Demo works anywhere.');
 setDash(S.dash);
 
 // test hooks
-window.__TH = { S, toBytes, cleanLines, parseDtcs, parseMode06, decodeDtc, summary, warmMisfires, csv, LIMITS, finishDrive, trackDrive, flushQueue, parseReadiness, smogVerdict, leakFindings, leakVerdict, framesH1, isotp, P01, SCAN, scanSummary, cylWatch, cylLine, COLS };
+window.__TH = { S, toBytes, cleanLines, parseDtcs, parseMode06, decodeDtc, summary, warmMisfires, csv, LIMITS, finishDrive, trackDrive, flushQueue, parseReadiness, smogVerdict, leakFindings, leakVerdict, framesH1, isotp, P01, SCAN, scanSummary, cylWatch, cylLine, COLS,
+  render, renderFuel, renderDash, MT_DEF, mtStatus, mtRender, tanks, logFill, gph, fuelCal, fuelFromRows, odoFuelLine, odoNow, odoLive, mergeRemote, syncDoc };
 })();
 </script>
 </body>
